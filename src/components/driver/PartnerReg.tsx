@@ -169,6 +169,8 @@ const PartnerReg = () => {
                     'Content-Type': 'multipart/form-data',
                 },
             });
+            console.log('Driver registration response:', response.data);
+            
             
             if (response.data.success) {
                 // Store the token and user data in session                
@@ -203,7 +205,7 @@ const PartnerReg = () => {
                 ((error as AxiosError)?.response?.data as { message?: string })?.message ||
                 'An error occurred while submitting your application. Please try again.'
             );
-            toast.error(`Error: ${error.response?.data?.error || 'Something went wrong!'}`);
+            toast.error(` ${error.response?.data?.error || 'Something went wrong!'}`);
         } finally {
             setIsSubmitting(false);
         }

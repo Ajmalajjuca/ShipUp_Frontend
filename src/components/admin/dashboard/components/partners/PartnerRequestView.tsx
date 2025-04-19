@@ -106,6 +106,7 @@ const PartnerRequestView: React.FC<PartnerRequestViewProps> = ({ partnerId, onBa
   const handleVerification = async (field: string) => {
     try {
       const response = await driverService.verifyDocument(partnerId, field);
+      
       if (response.success) {
         setPartner(prev => prev ? { ...prev, [field]: true } : null);
         toast.success('Verification updated successfully');

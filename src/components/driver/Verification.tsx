@@ -49,7 +49,7 @@ const Verification = () => {
                     const response = await driverService.checkVerificationStatus(driverData.email);
                     
                     if (response.success) {
-                        const data = response.data || {};
+                        const data = response.partner || {};
                         setVerificationData({
                             BankDetails: data?.BankDetails || false,
                             PersonalDocuments: data?.PersonalDocuments || false,

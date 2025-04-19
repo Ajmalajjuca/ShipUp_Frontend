@@ -343,9 +343,11 @@ const DeliveryPartnerDashboard: React.FC = () => {
       // Check if we already have driver data
       if (!driver.driverData) {
         const response = await partnerApi.get(`/api/drivers/by-email/${Email}`);
+        console.log('Driver details:', response.data);
+        
         
         dispatch(setDriverData({ 
-          driverData: response.data.driver,
+          driverData: response.data.partner.partnerDetails,
           token: response.data.token || driver.token
         }));
       }
