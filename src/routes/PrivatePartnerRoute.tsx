@@ -19,7 +19,7 @@ const PrivatePartnerRoute: React.FC<{ children: JSX.Element }> = ({ children }) 
           return;
         }
 
-        if (driverData.role !== 'driver') {
+        if (driverData.role !== 'partner') {
           sessionManager.clearDriverSession();
           toast.error('Invalid session. Please login again.');
           navigate('/partner', { replace: true });

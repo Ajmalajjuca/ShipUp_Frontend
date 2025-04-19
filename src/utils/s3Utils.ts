@@ -17,7 +17,7 @@ export const s3Utils = {
       
       const data = {
         purpose: 'document-upload',
-        role: 'driver'
+        role: 'partner'
       };
       
       const response = await axios({

@@ -46,10 +46,9 @@ const PartnerList: React.FC<PartnerListProps> = ({ onViewPartner }) => {
   const fetchPartners = async () => {
     try {
       const response = await driverService.getAllDrivers();
-      console.log('response:', response);
 
       // Filter only fully verified partners
-      const verifiedPartners = (response.partners || []).filter((partner: Partner) =>
+      const verifiedPartners = (response.partner || []).filter((partner: Partner) =>
         partner.bankDetailsCompleted === true &&
         partner.personalDocumentsCompleted === true &&
         partner.vehicleDetailsCompleted === true
@@ -63,6 +62,7 @@ const PartnerList: React.FC<PartnerListProps> = ({ onViewPartner }) => {
       setLoading(false);
     }
   };
+  
   
 
   const handleStatusToggle = async (partnerId: string, currentStatus: boolean) => {

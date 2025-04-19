@@ -115,7 +115,7 @@ const PartnerLog: React.FC = () => {
           sessionManager.setDriverSession(response.token, {
             email,
             partnerId: response.partnerId,
-            role: 'driver',
+            role: 'partner',
             refreshToken: response.refreshToken
           });
 

@@ -35,10 +35,11 @@ const PartnerRequest: React.FC<PartnerRequestProps> = ({ onViewPartner }) => {
   const fetchRequests = async () => {
     try {
       const response = await driverService.getAllDrivers();
+      console.log('Fetched partner requests:', response);
       
       
       // Filter partners that are not fully verified
-      const pendingPartners = (response.partners || []).filter((partner: PartnerRequest) => 
+      const pendingPartners = (response.partner || []).filter((partner: PartnerRequest) => 
         !partner.bankDetailsCompleted || 
         !partner.personalDocumentsCompleted || 
         !partner.vehicleDetailsCompleted

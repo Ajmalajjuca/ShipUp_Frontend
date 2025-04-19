@@ -174,11 +174,11 @@ const PartnerReg = () => {
             
             if (response.data.success) {
                 // Store the token and user data in session                
-                if (response.data.token && response.data.driver) {
+                if (response.data.token && response.data.partner) {
                     sessionManager.setDriverSession(response.data.token,{
-                        email:response.data.driver.email,
-                        partnerId:response.data.driver.partnerId,
-                        role:'driver'
+                        email:response.data.partner.email,
+                        partnerId:response.data.partner.partnerId,
+                        role:'partner'
                     });
                     toast.success('Registration successful!');
                     
