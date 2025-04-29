@@ -4,6 +4,7 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 interface DriverState {
     email: string;
     driverData: any | null;
+    driverDetails: any | null;
     token: string | null;
 }
 
@@ -14,6 +15,7 @@ const initialState: DriverState = persistedState ?
     {
         email: '',
         driverData: null,
+        driverDetails: null,
         token: null
     };
 
@@ -26,9 +28,10 @@ const driverSlice = createSlice({
             // Persist to localStorage
             localStorage.setItem('driverState', JSON.stringify(state));
         },
-        setDriverData: (state, action: PayloadAction<{ driverData: any; token: string }>) => {
+        setDriverData: (state, action: PayloadAction<{ driverData: any;driverDetails:any; token: string }>) => {
             state.driverData = action.payload.driverData;
             state.token = action.payload.token;
+            state.driverDetails = action.payload.driverDetails; // Assuming driverDetails is the same as driverData
             // Persist to localStorage
             localStorage.setItem('driverState', JSON.stringify(state));
         },

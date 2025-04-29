@@ -20,11 +20,13 @@ import {
   LogOut,
   HelpCircle,
   Shield,
-  ChevronLeft
+  ChevronLeft,
+  Car
 } from 'lucide-react';
 import UserList from './components/users/UserList';
 import PartnerList from './components/partners/PartnerList';
 import PartnerRequest from './components/partners/PartnerRequest';
+import VehicleList from './components/vehicles/VehicleList';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { sessionManager } from "../../../utils/sessionManager"; 
 import PartnerRequestView from './components/partners/PartnerRequestView';
@@ -141,13 +143,12 @@ const AdminDashboard: React.FC = () => {
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
   const [selectedVerifiedPartnerId, setSelectedVerifiedPartnerId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const navigate = useNavigate();
   
   const handleLogout = () => {
     sessionManager.logout();
   };
-
-
 
   // Check screen size and adjust sidebar for mobile responsiveness
   useEffect(() => {
@@ -233,6 +234,8 @@ const AdminDashboard: React.FC = () => {
         return <PartnerList onViewPartner={(id) => setSelectedVerifiedPartnerId(id)} />;
       case 'Requests':
         return <PartnerRequest onViewPartner={(id) => setSelectedPartnerId(id)} />;
+      case 'Vehicle List':
+        return <VehicleList onViewVehicle={(id) => setSelectedVehicleId(id)} />;
       default:
         return (
           <>
@@ -387,7 +390,6 @@ const AdminDashboard: React.FC = () => {
                   isActive={activeSubItem === 'User List'} 
                   onClick={() => handleSubItemClick('Users', 'User List')}
                 />
-                
               </div>
             )}
             
@@ -398,7 +400,6 @@ const AdminDashboard: React.FC = () => {
               hasDropdown={true}
               isActive={activeItem === 'Partners'}
               onClick={() => toggleDropdown('Partners')}
-              
               sidebarOpen={sidebarOpen}
             />
             
@@ -414,7 +415,26 @@ const AdminDashboard: React.FC = () => {
                   isActive={activeSubItem === 'Requests'} 
                   onClick={() => handleSubItemClick('Partners', 'Requests')}
                 />
-                
+              </div>
+            )}
+            
+            {/* Vehicles section */}
+            <SidebarItem 
+              icon={<Car size={18} />} 
+              title="Vehicles" 
+              hasDropdown={true}
+              isActive={activeItem === 'Vehicles'}
+              onClick={() => toggleDropdown('Vehicles')}
+              sidebarOpen={sidebarOpen}
+            />
+            
+            {isDropdownExpanded('Vehicles') && sidebarOpen && (
+              <div className="my-1 transition-all duration-300 ease-in-out" style={{maxHeight: '500px', overflow: 'hidden'}}>
+                <DropdownItem 
+                  title="Vehicle List" 
+                  isActive={activeSubItem === 'Vehicle List'} 
+                  onClick={() => handleSubItemClick('Vehicles', 'Vehicle List')}
+                />
               </div>
             )}
             

@@ -226,6 +226,8 @@ console.log('response', response);
     try {
       dispatch(loginStart());
       const response = await authService.googleAuth(credentialResponse.credential);
+      console.log('Google auth response:', response);
+      
       
       const { user, token, refreshToken } = response;
       

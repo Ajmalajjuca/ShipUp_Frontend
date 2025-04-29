@@ -1,95 +1,61 @@
-import { useState } from "react";
+import React from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Truck, ArrowRight } from 'lucide-react'
 
-const BookService: React.FC = () => {
-    const [city, setCity] = useState<string>("Bangalore");
+const BookService = () => {
+  const navigate = useNavigate()
 
-    return (
-        <div className="p-4 md:p-6 max-w-6xl mx-auto">
-            <div className="mb-8">
-                <h2 className="text-2xl font-bold">
-                    Book <span className="text-gray-900">A New Service</span>
-                </h2>
-                <div className="border-b-2 border-red-500 w-16 mt-2"></div>
+  const handleBookNow = () => {
+    navigate('/book')
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8 text-center">
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Book a Delivery</h2>
+        <p className="text-gray-600">Ready to send a package? Use our new booking system for fast and reliable deliveries.</p>
+      </div>
+
+      <div className="flex justify-center">
+        <div className="w-full  bg-red-50 border border-red-100 rounded-xl p-6 flex flex-col">
+          <div className="flex-grow">
+            <div className="p-3 rounded-full bg-red-100 inline-flex items-center justify-center mb-4">
+              <Truck className="h-6 w-6 text-red-500" />
             </div>
-
-            <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-                <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 items-end">
-                    <div className="w-full md:w-1/4 mb-4 md:mb-0">
-                        <div className="mb-2 text-sm text-gray-600">City:</div>
-                        <div className="relative inline-flex w-full">
-                            <select
-                                title='city'
-                                className="w-full bg-white border rounded-md py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline appearance-none"
-                                value={city}
-                                onChange={(e) => setCity(e.target.value)}
-                            >
-                                <option value="Bangalore">Bangalore</option>
-                                <option value="Mumbai">Mumbai</option>
-                                <option value="Delhi">Delhi</option>
-                            </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="w-full md:w-1/4">
-                        <div className="mb-2 text-sm text-gray-600">Origin</div>
-                        <div className="relative">
-                            <input
-                                type="text"
-                                placeholder="Enter Location"
-                                className="w-full bg-white border rounded-md py-2 pl-9 pr-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                            />
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" className="text-gray-600">
-                                    <path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10zm0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6z" />
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="w-full md:w-1/4">
-                        <div className="mb-2 text-sm text-gray-600">Destination</div>
-                        <div className="relative">
-                            <input
-                                type="text"
-                                placeholder="Enter Location"
-                                className="w-full bg-white border rounded-md py-2 pl-9 pr-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                            />
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" className="text-gray-600">
-                                    <path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10zm0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6z" />
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="w-full md:w-1/4">
-                        <div className="mb-2 text-sm text-gray-600">Kilometers</div>
-                        <div className="relative">
-                            <input
-                                type="text"
-                                placeholder="Kilometers (KM)"
-                                className="w-full bg-white border rounded-md py-2 pl-9 pr-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                            />
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" className="text-gray-600">
-                                    <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z" />
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-
-                    <button className="w-full md:w-auto bg-indigo-800 hover:bg-indigo-700 text-white font-medium py-2 px-8 rounded">
-                        Check Price
-                    </button>
-                </div>
-            </div>
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">New Booking Experience</h3>
+            <p className="text-gray-600 mb-4">
+              Our streamlined booking process makes it easy to:
+            </p>
+            <ul className="space-y-2 mb-6">
+              <li className="flex items-start">
+                <span className="text-green-500 mr-2">✓</span>
+                <span>Select pickup and dropoff locations from your saved addresses</span>
+              </li>
+              <li className="flex items-start">
+                <span className="text-green-500 mr-2">✓</span>
+                <span>Choose from different vehicle types based on your package size</span>
+              </li>
+              <li className="flex items-start">
+                <span className="text-green-500 mr-2">✓</span>
+                <span>Get instant price calculation based on distance</span>
+              </li>
+              <li className="flex items-start">
+                <span className="text-green-500 mr-2">✓</span>
+                <span>Select between standard and express delivery options</span>
+              </li>
+            </ul>
+          </div>
+          <button
+            onClick={handleBookNow}
+            className="bg-indigo-900 hover:bg-indigo-800 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center"
+          >
+            Book Now
+            <ArrowRight className="ml-2 h-5 w-5" />
+          </button>
         </div>
-    );
-};
+      </div>
+    </div>
+  )
+}
 
 export default BookService

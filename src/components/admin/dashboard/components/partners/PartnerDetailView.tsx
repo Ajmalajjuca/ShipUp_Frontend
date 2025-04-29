@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Calendar, Search } from 'lucide-react';
 import { driverService } from '../../../../../services/driver.service';
 import { toast } from 'react-hot-toast';
+import { vehicleService } from '../../../../../services/vehicle.service';
 
 interface Order {
   orderId: string;
@@ -23,7 +24,9 @@ interface Partner {
   mobileNumber: string;
   createdAt: string;
   profileImage?: string;
-  vehicleType: string;
+  vehicleDetails:{
+    name: string;
+  }
   registrationNumber: string;
 }
 
@@ -53,9 +56,25 @@ const PartnerDetailView: React.FC<PartnerDetailViewProps> = ({ partnerId, onBack
 
   const fetchPartnerDetails = async () => {
     try {
-      const response = await driverService.getDriverById(partnerId);
-      setPartner(response.partner);
-
+      const partnerRes = await driverService.getDriverById(partnerId);
+      console.log('Fetched partner details:', partnerRes);
+  
+      const vehicleId = partnerRes?.partner?.vehicleId;
+  
+      let vehicleDetails = null;
+      if (vehicleId) {
+        try {
+          const vehicleRes = await vehicleService.getVehicleById(vehicleId);
+          console.log('Fetched vehicle details:', vehicleRes);
+          vehicleDetails = vehicleRes?.vehicle;
+        } catch (error) {
+          console.error('Error fetching vehicle details:', error);
+          toast.error('Failed to fetch vehicle details');
+        }
+      }
+  
+      setPartner(partnerRes.partner ? { ...partnerRes.partner, vehicleDetails } : null);
+  
     } catch (error) {
       console.error('Error fetching partner details:', error);
       toast.error('Failed to fetch partner details');
@@ -159,7 +178,7 @@ const PartnerDetailView: React.FC<PartnerDetailViewProps> = ({ partnerId, onBack
 
               <div className="mt-4 md:mt-0">
                 <h4 className="text-gray-700 font-medium mb-2">Vehical info</h4>
-                <p className="text-gray-600">Vehical Type: {partner.vehicleType}</p>
+                <p className="text-gray-600">Vehical Type: {partner.vehicleDetails.name}</p>
                 <p className="text-gray-600">Vehical Number: {partner.registrationNumber}</p>
               </div>
             </div>

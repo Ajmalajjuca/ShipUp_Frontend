@@ -10,6 +10,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
 import { partnerApi } from '../../../services/axios/instance';
 import { setDriverData } from '../../../Redux/slices/driverSlice';
+import { vehicleService } from '../../../services/vehicle.service';
 
 // TypeScript Interfaces
 interface EditableSectionProps {
@@ -19,7 +20,7 @@ interface EditableSectionProps {
   onEdit: () => void;
   onSave: () => void;
   onCancel: () => void;
-  children: React.ReactNode;
+  children:React.ReactNode;
 }
 
 interface EditDataType {
@@ -95,10 +96,11 @@ const EditableSection: React.FC<EditableSectionProps> = ({
 const PartnerProfile: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const driver = useSelector((state: RootState) => state.driver.driverData);
+  const driver = useSelector((state: RootState) => state.driver.driverDetails);
   const Email = useSelector((state: RootState) => state.driver.email);
 
   const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [vehicleTypes, setVehicleTypes] = useState<{ id: string; label: string }[]>([]);
   const [editData, setEditData] = useState<EditDataType>({
     personal: {
       fullName: driver?.fullName || '',
@@ -119,40 +121,98 @@ const PartnerProfile: React.FC = () => {
     }
   });
 
-  // Navigation and data initialization effects
+  const fetchVehicleData = async () => {
+    try {
+      const response = await vehicleService.getVehicleById(driver?.vehicleId);
+      if (response.success) {
+        setEditData((prevData) => ({
+          ...prevData,
+          vehicle: {
+            ...prevData.vehicle,
+            vehicleType: response?.vehicle?.name || ''
+          }
+        }));
+        dispatch(setDriverData({
+          driverData: {
+            ...driver,
+          },
+
+          driverDetails: {
+            ...driver,
+            vehicleType: response?.vehicle?.name || ''
+          },
+          token: driver.token
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching vehicle data:', error);
+      toast.error('Failed to fetch vehicle data');
+    }
+  };
+
+  const fetchVehicleTypes = async () => {
+    try {
+      const response = await vehicleService.getVehicles();
+      if (response.success) {
+        setVehicleTypes(response.vehicles.map(vehicle => ({ 
+          id: vehicle.id, 
+          label: vehicle.name 
+        })));
+      } else {
+        console.error('Failed to fetch vehicle types:', response.message);
+        toast.error('Failed to fetch vehicle types');
+      }
+    } catch (error) {
+      console.error('Error fetching vehicle types:', error);
+      toast.error('Error fetching vehicle types');
+    }
+  };
+
+  // Consolidated effect for initialization and data fetching
   useEffect(() => {
     if (!Email) {
       navigate('/partner');
+      return;
     }
-  }, [Email, navigate]);
 
-  useEffect(() => {
     if (driver) {
+      // Update editData when driver changes
       setEditData({
         personal: {
-          fullName: driver.fullName,
-          mobileNumber: driver.mobileNumber,
-          email: driver.email,
-          address: driver.address,
-          dateOfBirth: driver.dateOfBirth
+          fullName: driver.fullName || '',
+          mobileNumber: driver.mobileNumber || '',
+          email: driver.email || '',
+          address: driver.address || '',
+          dateOfBirth: driver.dateOfBirth || ''
         },
         vehicle: {
-          vehicleType: driver.vehicleType,
-          registrationNumber: driver.registrationNumber
+          vehicleType: driver.vehicleType || '',
+          registrationNumber: driver.registrationNumber || ''
         },
         bank: {
-          accountHolderName: driver.accountHolderName,
-          accountNumber: driver.accountNumber,
-          ifscCode: driver.ifscCode,
-          upiId: driver.upiId
+          accountHolderName: driver.accountHolderName || '',
+          accountNumber: driver.accountNumber || '',
+          ifscCode: driver.ifscCode || '',
+          upiId: driver.upiId || ''
         }
       });
+
+      // Fetch vehicle-related data
+      const fetchData = async () => {
+        await Promise.all([fetchVehicleData(), fetchVehicleTypes()]);
+      };
+      
+      fetchData();
     }
-  }, [driver]);
+
+    // Cleanup function
+    return () => {
+      // Cancel any pending async operations if needed
+    };
+  }, [ Email, navigate, dispatch]);
 
   // Save handler for different sections
   const handleSave = async (section: keyof EditDataType) => {
-    
     try {
       const response = await partnerApi.put(`/api/drivers/${driver.partnerId}/${section}`, {
         ...editData[section]
@@ -161,9 +221,11 @@ const PartnerProfile: React.FC = () => {
       if (response.data.success) {
         toast.success(`${section} details updated successfully`);
         setActiveSection(null);
-        // Update Redux state
         dispatch(setDriverData({
-          driverData: response.data.partner,
+          driverData: {
+            ...driver,
+          },
+          driverDetails: response.data.partner,
           token: driver.token
         }));
       }
@@ -183,7 +245,6 @@ const PartnerProfile: React.FC = () => {
     formData.append('profileImage', file);
 
     try {
-      
       const response = await partnerApi.put(
         `/api/drivers/${driver.partnerId}/profile-image`, 
         formData,
@@ -196,9 +257,11 @@ const PartnerProfile: React.FC = () => {
       
       if (response.data.success) {
         toast.success('Profile image updated successfully');
-        // Update Redux state
         dispatch(setDriverData({
-          driverData: response.data.partner,
+          driverData: {
+            ...driver,
+          },
+          driverDetails: response.data.partner,
           token: driver.token
         }));
       }
@@ -409,15 +472,23 @@ const PartnerProfile: React.FC = () => {
               <>
                 <div className="space-y-2">
                   <label className="text-sm text-gray-600">Vehicle Type</label>
-                  <input
-                    type="text"
+                  <select
                     value={editData.vehicle.vehicleType}
-                    onChange={(e) => setEditData({
-                      ...editData,
-                      vehicle: { ...editData.vehicle, vehicleType: e.target.value }
-                    })}
+                    onChange={(e) =>
+                      setEditData({
+                        ...editData,
+                        vehicle: { ...editData.vehicle, vehicleType: e.target.value }
+                      })
+                    }
                     className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
+                  >
+                    <option value="">Select vehicle type</option>
+                    {vehicleTypes.map((vehicle) => (
+                      <option key={vehicle.id} value={vehicle.label}>
+                        {vehicle.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm text-gray-600">Registration Number</label>

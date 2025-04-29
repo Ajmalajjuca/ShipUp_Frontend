@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DriverRegistrationData } from '../types';
 import { s3Utils } from '../../../utils/s3Utils';
+import { vehicleService } from '../../../services/vehicle.service';
 
 // Define interface for document URLs
 interface DocumentUrls {
@@ -21,7 +22,7 @@ export const VehicleDetailsForm: React.FC<VehicleDetailsFormProps> = ({ initialD
     vehicleModel: initialData.vehicleModel || '',
     manufacturingYear: initialData.manufacturingYear || '',
   });
-  
+  const [vehicleTypes, setVehicleTypes] = useState<{ id: string; label: string }[]>([]);
   // Track files for each document type (removed back files)
   const [documents, setDocuments] = useState<{
     insurance: { front?: File };
@@ -66,15 +67,30 @@ export const VehicleDetailsForm: React.FC<VehicleDetailsFormProps> = ({ initialD
         license: initialData.vehicleDocuments.license
       });
     }
+
+    
   }, [initialData.vehicleDocuments]);
 
-  const vehicleTypes = [
-    { id: '2-wheeler', label: '2-Wheeler' },
-    { id: 'mini-truck', label: 'Mini Truck' },
-    { id: 'truck', label: 'Truck' },
-    { id: 'pickup', label: 'Pickup' },
-  ];
+  // Fetch vehicle types on component mount
+  useEffect(() => {
+    fetchVehicleTypes();
+  }, []);
 
+
+  const fetchVehicleTypes = async () => {
+    try{
+      const response = await vehicleService.getVehicles()
+      console.log('Vehicle types response:', response);
+      
+      if(response.success){
+        setVehicleTypes(response.vehicles.map(vehicle => ({ id: vehicle.id, label: vehicle.name })));
+      }else{
+        console.error('Failed to fetch vehicle types:', response.message);
+      }
+    }catch(error){
+      console.error('Error fetching vehicle types:', error);
+    }
+  }
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     

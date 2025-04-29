@@ -79,5 +79,46 @@ export const userService = {
   deleteUser: async (id: string) => {
     const response = await userApi.delete(`/users/${id}`);
     return response.data;
-  }
+  },
+
+  addAddress: async (userId: string, address: any) => {
+    const response = await userApi.post(`/users/${userId}/addresses`, {
+      type: address.type,
+      street: address.street,
+      isDefault: address.isDefault,
+      latitude: address.latitude,
+      longitude: address.longitude,
+      streetNumber: address.streetNumber,
+      buildingNumber: address.buildingNumber,
+      floorNumber: address.floorNumber,
+      contactName: address.contactName,
+      contactPhone: address.contactPhone
+    });
+    return response.data;
+  },
+
+  getUserAddresses: async (userId: string) => {
+    const response = await userApi.get(`/users/${userId}/addresses`);
+    return response.data;
+  },
+
+  deleteAddress: async (addressId: string) => {
+    const response = await userApi.delete(`/addresses/${addressId}`);
+    return response.data;
+  },
+
+  setDefaultAddress: async (userId: string, addressId: string) => {
+    const response = await userApi.put(`/users/${userId}/addresses/${addressId}/default`);
+    return response.data;
+  },
+
+  getAddress: async (addressId: string) => {
+    const response = await userApi.get(`/addresses/${addressId}`);
+    return response.data;
+  },
+
+  updateAddress: async (addressId: string, addressData: any) => {
+    const response = await userApi.put(`/addresses/${addressId}`, addressData);
+    return response.data;
+  },
 }; 

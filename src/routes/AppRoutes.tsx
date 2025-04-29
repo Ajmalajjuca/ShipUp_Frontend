@@ -14,6 +14,8 @@ import AdminDashboard from '../components/admin/dashboard/AdminDashboard';
 import EditProfile from '../components/user/Profile/ProfileComponents/EditProfile';
 import AddressBook from '../components/user/Profile/ProfileComponents/AddressBook';
 import AddAddressForm from '../components/user/Profile/ProfileComponents/AddAddressForm';
+import EditAddressForm from '../components/user/Profile/ProfileComponents/EditAddressForm';
+import OrderBooking from '../components/user/Home/OrderBooking';
 import PrivateRoute from './PrivateRoute';
 import PrivatePartnerRoute from './PrivatePartnerRoute';
 import AuthRoute from './AuthRoute';
@@ -33,6 +35,9 @@ const AppRoutes = () => {
       <Route path="/profile/edit" element={<PrivateRoute><EditProfile /></PrivateRoute>} />
       <Route path="/address" element={<PrivateRoute><AddressBook /></PrivateRoute>} />
       <Route path="/address/add" element={<PrivateRoute><AddAddressForm /></PrivateRoute>} />
+      <Route path="/address/edit/:addressId" element={<PrivateRoute><EditAddressForm /></PrivateRoute>} />
+      <Route path="/book" element={<PrivateRoute><OrderBooking /></PrivateRoute>} />
+      <Route path="/orders" element={<PrivateRoute><ShipUpApp /></PrivateRoute>} />
       
       {/* Partner Routes */}
       <Route path="/register" element={<PartnerReg />} />

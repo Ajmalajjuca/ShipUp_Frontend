@@ -1,21 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Autocomplete, useJsApiLoader } from '@react-google-maps/api';
-
-const GOOGLE_MAPS_API_KEY = 'AIzaSyAr9iKL412E6QE40v2xpCgroD99-JBzFNU';
+import { useNavigate } from 'react-router-dom';
 
 const libraries: ("places")[] = ["places"];
 
 const Calculator: React.FC = () => {
+  const navigate = useNavigate();
   const [city, setCity] = useState('Bangalore');
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
   const [distance, setDistance] = useState('');
+  const [calculatedPrice, setCalculatedPrice] = useState<number | null>(null);
   
   const originRef = useRef<google.maps.places.Autocomplete | null>(null);
   const destinationRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
     libraries,
   });
 
@@ -37,10 +38,28 @@ const Calculator: React.FC = () => {
     }
   }, [isLoaded]);
 
+  const handleCheckPrice = () => {
+    // Basic price calculation - for demonstration purposes
+    if (distance) {
+      const distanceNum = parseFloat(distance);
+      if (!isNaN(distanceNum)) {
+        // Base price: ₹20 per km
+        const price = distanceNum * 20;
+        setCalculatedPrice(price);
+      }
+    } else {
+      alert('Please enter a distance to calculate price');
+    }
+  };
+
+  const handleProceedToBook = () => {
+    navigate('/book');
+  };
+
   return (
     <div>
-      <section className="container mx-auto py-8 px-4 md:px-8">
-        <div className="bg-white p-6 rounded-lg shadow-md">
+      <section className="container mx-auto py-4">
+        <div className="bg-white p-6 rounded-lg">
           <div className="flex items-center mb-4">
             <div className="flex items-center">
               <svg viewBox="0 0 24 24" className="w-5 h-5 mr-2 text-gray-700" fill="currentColor">
@@ -90,7 +109,7 @@ const Calculator: React.FC = () => {
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Kilometer (KM) Optional"
+                  placeholder="Kilometer (KM)"
                   className="w-full pl-10 pr-4 py-2 border rounded-md"
                   value={distance}
                   onChange={(e) => setDistance(e.target.value)}
@@ -99,8 +118,24 @@ const Calculator: React.FC = () => {
             </div>
           </div>
 
+          {calculatedPrice !== null && (
+            <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-md">
+              <p className="font-medium text-green-800">Estimated Price: ₹{calculatedPrice.toFixed(2)}</p>
+              <p className="text-sm text-green-600 mt-1">This is a base estimate. Final price may vary based on vehicle type and delivery speed.</p>
+              <button 
+                onClick={handleProceedToBook}
+                className="mt-3 bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition-colors"
+              >
+                Proceed to Book
+              </button>
+            </div>
+          )}
+
           <div className="mt-4 flex justify-end">
-            <button className="bg-indigo-900 text-white py-2 px-6 rounded-md hover:bg-indigo-800">
+            <button 
+              onClick={handleCheckPrice}
+              className="bg-indigo-900 text-white py-2 px-6 rounded-md hover:bg-indigo-800"
+            >
               Check Price
             </button>
           </div>

@@ -217,6 +217,7 @@ export const sessionManager = {
           'Content-Type': 'application/json'
         }
       });
+console.log('userResponse:', userResponse.data);
 
       if (userResponse.data.success) {
         // Get the current refresh token
@@ -290,7 +291,7 @@ export const sessionManager = {
   setDriverSession(token: string, driverData: any) {
     localStorage.setItem('driverToken', token);
     localStorage.setItem('driverData', JSON.stringify(driverData));
-    // store.dispatch(setDriverData({ driverData, token }));
+    store.dispatch(setDriverData({ driverData, token,driverDetails:'' }));
   },
 
   getDriverSession() {

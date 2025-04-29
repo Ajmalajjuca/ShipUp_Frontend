@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Home, Briefcase, MapPin, Navigation, Pencil, MapPinOff } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import ProfileLayout from '../ProfileLayout';
 import L from 'leaflet';
@@ -15,7 +15,19 @@ import { RootState } from '../../../../Redux/store';
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
-// Remove Leaflet namespace declaration that's causing errors
+// Fix Leaflet default icon issues
+const DefaultIcon = L.Icon.extend({
+  options: {
+    iconUrl: icon,
+    shadowUrl: iconShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+  }
+});
+
+L.Marker.prototype.options.icon = new DefaultIcon();
 
 interface AddressFormData {
   type: 'home' | 'work' | 'other';
@@ -30,10 +42,12 @@ interface AddressFormData {
   contactPhone?: string;
 }
 
-const AddAddressForm: React.FC = () => {
+const EditAddressForm: React.FC = () => {
   const navigate = useNavigate();
+  const { addressId } = useParams<{ addressId: string }>();
   const { user } = useSelector((state: RootState) => state.auth);
   const userId = user?.userId || user?._id;
+  
   const [formData, setFormData] = useState<AddressFormData>({
     type: 'home',
     street: '',
@@ -46,8 +60,10 @@ const AddAddressForm: React.FC = () => {
     contactName: '',
     contactPhone: ''
   });
+  
   const [errors, setErrors] = useState<Partial<AddressFormData>>({});
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [addressFromMap, setAddressFromMap] = useState<string>('');
 
   // Map references
@@ -57,26 +73,51 @@ const AddAddressForm: React.FC = () => {
   const drawControlRef = useRef<any>(null);
   const drawnItemsRef = useRef<L.FeatureGroup | null>(null);
 
-  // Fix Leaflet default icon issues
+  // Fetch the address details when component mounts
   useEffect(() => {
-    // Fix Leaflet default icon issues
-    const DefaultIcon = L.Icon.extend({
-      options: {
-        iconUrl: icon,
-        shadowUrl: iconShadow,
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41]
+    const fetchAddress = async () => {
+      if (!addressId) return;
+      
+      try {
+        setInitialLoading(true);
+        const response = await userService.getAddress(addressId);
+        
+        if (response.success && response.address) {
+          const address = response.address;
+          
+          setFormData({
+            type: address.type,
+            street: address.street,
+            isDefault: address.isDefault,
+            latitude: address.latitude,
+            longitude: address.longitude,
+            streetNumber: address.streetNumber || '',
+            buildingNumber: address.buildingNumber || '',
+            floorNumber: address.floorNumber || '',
+            contactName: address.contactName || '',
+            contactPhone: address.contactPhone || ''
+          });
+          
+          setAddressFromMap(address.street);
+        } else {
+          toast.error('Failed to load address details');
+          navigate('/address');
+        }
+      } catch (error) {
+        console.error('Error fetching address:', error);
+        toast.error('Failed to load address details');
+        navigate('/address');
+      } finally {
+        setInitialLoading(false);
       }
-    });
+    };
     
-    L.Marker.prototype.options.icon = new DefaultIcon();
-  }, []);
+    fetchAddress();
+  }, [addressId, navigate]);
 
   // Initialize map
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return;
+    if (!mapContainerRef.current || mapRef.current || initialLoading) return;
 
     // Initialize the map
     const map = L.map(mapContainerRef.current).setView([20.5937, 78.9629], 5); // Default to India
@@ -127,11 +168,21 @@ const AddAddressForm: React.FC = () => {
 
     mapRef.current = map;
 
+    // If we have coordinates, set the marker and view
+    if (formData.latitude && formData.longitude) {
+      const latLng = new L.LatLng(formData.latitude, formData.longitude);
+      map.setView(latLng, 15);
+      
+      // Create a marker
+      const marker = L.marker(latLng).addTo(map);
+      markerRef.current = marker;
+    }
+
     return () => {
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [initialLoading, formData.latitude, formData.longitude]);
 
   // Handle map click to place marker
   const handleMapClick = (latLng: L.LatLng) => {
@@ -273,13 +324,13 @@ const AddAddressForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validate()) {
+    if (!validate() || !addressId) {
       return;
     }
     
     try {
       setLoading(true);
-      const response = await userService.addAddress(userId, {
+      const response = await userService.updateAddress(addressId, {
         ...formData,
         latitude: formData.latitude || undefined,
         longitude: formData.longitude || undefined,
@@ -290,17 +341,29 @@ const AddAddressForm: React.FC = () => {
         contactPhone: formData.contactPhone || undefined
       });
       
-      console.log('Address added:', response);
+      console.log('Address updated:', response);
       
-      toast.success('Address added successfully!');
+      toast.success('Address updated successfully!');
       navigate('/address');
     } catch (error) {
-      toast.error('Failed to add address. Please try again.');
-      console.error('Error adding address:', error);
+      toast.error('Failed to update address. Please try again.');
+      console.error('Error updating address:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  if (initialLoading) {
+    return (
+      <ProfileLayout>
+        <div className="w-full md:w-2/3">
+          <div className="bg-white rounded-xl shadow-md p-6 flex justify-center items-center min-h-[400px]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500"></div>
+          </div>
+        </div>
+      </ProfileLayout>
+    );
+  }
 
   return (
     <ProfileLayout>
@@ -315,7 +378,7 @@ const AddAddressForm: React.FC = () => {
             >
               <ArrowLeft size={20} />
             </button>
-            <h1 className="text-xl font-semibold">Add New Address</h1>
+            <h1 className="text-xl font-semibold">Edit Address</h1>
           </div>
           
           <form onSubmit={handleSubmit}>
@@ -366,7 +429,7 @@ const AddAddressForm: React.FC = () => {
               </div>
             </div>
             
-            {/* Contact Person Info - Similar to the image */}
+            {/* Contact Person Info */}
             <div className="mb-6">
               <h2 className="text-base font-semibold mb-4 text-gray-700">Contact Person Info</h2>
               <div className="space-y-4">
@@ -503,7 +566,6 @@ const AddAddressForm: React.FC = () => {
                   />
                 </div>
               </div>
-
             </div>
             
             {/* Map container with controls */}
@@ -581,9 +643,9 @@ const AddAddressForm: React.FC = () => {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Saving...
+                    Updating...
                   </div>
-                ) : 'Save Info'}
+                ) : 'Update Address'}
               </button>
             </div>
           </form>
@@ -593,4 +655,4 @@ const AddAddressForm: React.FC = () => {
   );
 };
 
-export default AddAddressForm; 
+export default EditAddressForm; 

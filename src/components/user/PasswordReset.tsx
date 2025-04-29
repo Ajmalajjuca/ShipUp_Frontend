@@ -43,7 +43,7 @@ const PasswordReset: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Reset Error:', error);
-      toast.error(error.response?.data?.message || 'Something went wrong!');
+      toast.error(error.response?.data?.error || 'Something went wrong!');
     } finally {
       setIsLoading(false);
     }

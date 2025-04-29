@@ -7,6 +7,8 @@ export const restoreSession = async (dispatch: AppDispatch) => {
   const token = localStorage.getItem('token');
   const storedUser = localStorage.getItem('user');
   const pendingUser = localStorage.getItem('pendingUser');
+  const refreshToken = localStorage.getItem('refreshToken');
+  
 
   dispatch(restoreSessionStart());
 
@@ -15,7 +17,7 @@ export const restoreSession = async (dispatch: AppDispatch) => {
       const response = await axios.get('http://localhost:3001/auth/protected', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      dispatch(loginSuccess({ user: JSON.parse(storedUser), token }));
+      dispatch(loginSuccess({ user: JSON.parse(storedUser), token, refreshToken: refreshToken || '' }));
     } catch (error) {
       console.error('Token validation failed:', error);
       dispatch(logout());
