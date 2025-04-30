@@ -8,8 +8,9 @@ import { partnerApi } from '../../../services/axios/instance';
 import { setDriverData, clearDriverData } from '../../../Redux/slices/driverSlice';
 import { sessionManager } from '../../../utils/sessionManager';
 import toast from 'react-hot-toast';
-import { Socket as SocketIOClient } from 'socket.io-client';
+import { Socket } from 'socket.io-client';
 import io from 'socket.io-client';
+import { activeOrderService } from '../../../services/active-order.service';
 
 
 
@@ -40,6 +41,7 @@ interface DeliveryRequest {
   paymentMethod:string;
   pickupOtp?: string;
   dropoffOtp?: string;
+  
 }
 
 interface OtpVerification {
@@ -47,6 +49,23 @@ interface OtpVerification {
   type: 'pickup' | 'dropoff';
   enteredOtp: string;
   orderOtp?: string;
+}
+
+// Extended interface for driver's active order
+interface DriverActiveOrder {
+  driverId: string;
+  orderId: string;
+  pickupLocation: Location;
+  dropLocation: Location;
+  customerName: string;
+  amount: number;
+  estimatedTime: string;
+  distance: number;
+  paymentMethod: string;
+  pickupOtp?: string;
+  dropoffOtp?: string;
+  status: 'heading_to_pickup' | 'picked_up' | 'delivering' | 'completed';
+  timestamp: number;
 }
 
 // Navigation Item Component
@@ -271,7 +290,7 @@ const ActiveDeliveryCard: React.FC<{
             </div>
             <div className="ml-3">
               <p className="font-medium">Pickup Location</p>
-              <p className="text-sm text-gray-600 truncate max-w-xs">{orderDetails.pickupLocation.street || 'Address not available'}</p>
+              <p className="text-sm text-gray-600 truncate max-w-xs">{orderDetails.pickupLocation?.street || 'Address not available'}</p>
             </div>
           </div>
           
@@ -292,7 +311,7 @@ const ActiveDeliveryCard: React.FC<{
             </div>
             <div className="ml-3">
               <p className="font-medium">Dropoff Location</p>
-              <p className="text-sm text-gray-600 truncate max-w-xs">{orderDetails.dropLocation.street || 'Address not available'}</p>
+              <p className="text-sm text-gray-600 truncate max-w-xs">{orderDetails.dropLocation?.street || 'Address not available'}</p>
             </div>
           </div>
         </div>
@@ -367,7 +386,7 @@ const ActiveDeliveryCard: React.FC<{
             
             <div className="flex space-x-4">
               <a
-                href={`https://www.google.com/maps/dir/?api=1&destination=${orderDetails.pickupLocation.latitude},${orderDetails.pickupLocation.longitude}`}
+                href={`https://www.google.com/maps/dir/?api=1&destination=${orderDetails.pickupLocation?.latitude},${orderDetails.pickupLocation?.longitude}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 py-2 px-4 bg-blue-50 text-blue-600 rounded-lg font-medium hover:bg-blue-100 transition-colors text-center flex items-center justify-center"
@@ -600,8 +619,8 @@ const DeliveryPartnerDashboard: React.FC = () => {
   const navigate = useNavigate();
   const Email = useSelector((state: RootState) => state.driver.email);
   const driver = useSelector((state: RootState) => state.driver);
-  const [isOnline, setIsOnline] = useState<boolean>(driver.driverData?.isAvailable || false);
-  const socketRef = useRef<SocketIOClient | null>(null);
+  const [isOnline, setIsOnline] = useState<boolean>(driver.driverData.isAvailable);
+  const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   console.log('Driver data:', driver);
@@ -655,7 +674,7 @@ const DeliveryPartnerDashboard: React.FC = () => {
       socketRef.current = socket;
 
       // Log all events for debugging
-      socket.onAny((event, ...args) => {
+      socket.onAny((event: string, ...args: any[]) => {
         console.log(`🔄 Socket event: ${event}`, args);
         addWsEvent(`Event: ${event}`);
       });
@@ -673,22 +692,17 @@ const DeliveryPartnerDashboard: React.FC = () => {
         });
       });
 
-      socket.on('connect_error', (error) => {
+      // Handler for the connect_error event
+      socket.on('connect_error', (error: Error) => {
         console.error('❌ Socket connection error:', error);
         addWsEvent(`Connect error: ${error.message}`);
         toast.error('Connection error. Retrying...');
       });
 
-      socket.on('disconnect', (reason) => {
+      // Handler for the disconnect event
+      socket.on('disconnect', (reason: string) => {
         console.log('🔌 Socket disconnected:', reason);
         addWsEvent(`Disconnected: ${reason}`);
-
-        if (reason === 'io server disconnect') {
-          // The server has forcefully disconnected the socket
-          setTimeout(() => {
-            socket.connect();
-          }, 1000);
-        }
       });
 
       socket.on('authenticated', (data: any) => {
@@ -970,6 +984,10 @@ const DeliveryPartnerDashboard: React.FC = () => {
       setHasActiveDelivery(true);
       setActiveDeliveryDetails(deliveryRequest);
       setDeliveryStatus('heading_to_pickup');
+      
+      // Save active delivery state
+      saveActiveDelivery(deliveryRequest, 'heading_to_pickup');
+      
       setDeliveryRequest(null); // Clear the request modal
       toast.success('Delivery accepted! Navigate to the pickup location.');
       
@@ -986,8 +1004,11 @@ const DeliveryPartnerDashboard: React.FC = () => {
     }
   };
 
+  // Function to verify OTP
   const verifyOtp = async (type: 'pickup' | 'dropoff', otp: string) => {
     if (!activeDeliveryDetails || !driver.driverData?.partnerId) return;
+    
+    console.log(`Verifying ${type} OTP: ${otp} for order ${activeDeliveryDetails.orderId}`);
     
     try {
       // Verify OTP on server
@@ -997,13 +1018,15 @@ const DeliveryPartnerDashboard: React.FC = () => {
         partnerId: driver.driverData.partnerId
       });
       
+      console.log(`OTP verification response:`, response.data);
+      
       if (response.data.success) {
         // OTP verification successful
         toast.success(`${type === 'pickup' ? 'Pickup' : 'Delivery'} verified successfully!`);
         
         // Update delivery status
         if (type === 'pickup') {
-          setDeliveryStatus('picked_up');
+          await updateDeliveryStatus('picked_up');
           
           // Notify via socket about pickup verification
           if (socketRef.current?.connected) {
@@ -1016,14 +1039,14 @@ const DeliveryPartnerDashboard: React.FC = () => {
           
           // Try to open maps with directions to dropoff
           try {
-            const mapUrl = `https://www.google.com/maps/dir/?api=1&destination=${activeDeliveryDetails.dropLocation.latitude},${activeDeliveryDetails.dropLocation.longitude}`;
+            const mapUrl = `https://www.google.com/maps/dir/?api=1&destination=${activeDeliveryDetails.dropLocation?.latitude},${activeDeliveryDetails.dropLocation?.longitude}`;
             window.open(mapUrl, '_blank');
           } catch (error) {
             console.error('Could not open maps:', error);
           }
         } else {
           // For dropoff verification
-          setDeliveryStatus('delivering');
+          await updateDeliveryStatus('completed');
           
           // Notify via socket about delivery completion
           if (socketRef.current?.connected) {
@@ -1033,21 +1056,20 @@ const DeliveryPartnerDashboard: React.FC = () => {
               status: 'delivered'
             });
           }
-          
-          // Reset after a delay
-          setTimeout(() => {
-            setHasActiveDelivery(false);
-            setActiveDeliveryDetails(null);
-            setIsOnline(true); // Make available for new orders
-          }, 5000);
         }
       } else {
         // Invalid OTP
-        toast.error('Invalid OTP. Please check and try again.');
+        toast.error(response.data.message || 'Invalid OTP. Please check and try again.');
       }
     } catch (error) {
       console.error(`Error verifying ${type} OTP:`, error);
-      toast.error(`Failed to verify ${type} OTP. Please try again.`);
+      
+      // Add more detailed error information
+      if ((error as any).response?.data?.message) {
+        toast.error(`Error: ${(error as any).response.data.message}`);
+      } else {
+        toast.error(`Failed to verify ${type} OTP. Please try again.`);
+      }
     }
   };
 
@@ -1068,6 +1090,11 @@ const DeliveryPartnerDashboard: React.FC = () => {
       // If driver is online, set them to offline first
       if (isOnline) {
         await updateDriverAvailability(false);
+      }
+
+      // Clear active delivery data if any
+      if (hasActiveDelivery && driver.driverData?.partnerId) {
+        await removeActiveDelivery();
       }
 
       // Disconnect socket
@@ -1213,6 +1240,271 @@ const DeliveryPartnerDashboard: React.FC = () => {
       </div>
     );
   };
+
+  // Function to save active delivery to Redis and localStorage
+  const saveActiveDelivery = async (delivery: DeliveryRequest, status: 'heading_to_pickup' | 'picked_up' | 'delivering' | 'completed') => {
+    if (!driver.driverData?.partnerId) return;
+    
+    try {
+      const activeOrderData: DriverActiveOrder = {
+        driverId: driver.driverData.partnerId,
+        orderId: delivery.orderId,
+        pickupLocation: delivery.pickupLocation,
+        dropLocation: delivery.dropLocation,
+        customerName: delivery.customerName,
+        amount: delivery.amount,
+        estimatedTime: delivery.estimatedTime,
+        distance: delivery.distance,
+        paymentMethod: delivery.paymentMethod,
+        pickupOtp: delivery.pickupOtp,
+        dropoffOtp: delivery.dropoffOtp,
+        status: status,
+        timestamp: Date.now()
+      };
+      
+      // Store in Redis via activeOrderService
+      if (driver.driverData.partnerId) {
+        await activeOrderService.storeActiveOrder(
+          driver.driverData.partnerId, 
+          // Cast to ActiveOrder because we're using the same service for drivers and users
+          activeOrderData as any
+        );
+        console.log('📦 Active delivery saved to Redis');
+      }
+      
+      // Also save to localStorage for backup
+      localStorage.setItem('driverActiveDelivery', JSON.stringify(activeOrderData));
+    } catch (error) {
+      console.error('Error saving active delivery:', error);
+      toast.error('Could not save delivery state');
+      
+      // Fallback to localStorage
+      try {
+        const activeOrderData = {
+          driverId: driver.driverData.partnerId,
+          orderId: delivery.orderId,
+          pickupLocation: delivery.pickupLocation,
+          dropLocation: delivery.dropLocation,
+          customerName: delivery.customerName,
+          amount: delivery.amount,
+          estimatedTime: delivery.estimatedTime,
+          distance: delivery.distance,
+          paymentMethod: delivery.paymentMethod,
+          pickupOtp: delivery.pickupOtp,
+          dropoffOtp: delivery.dropoffOtp,
+          status: status,
+          timestamp: Date.now()
+        };
+        localStorage.setItem('driverActiveDelivery', JSON.stringify(activeOrderData));
+      } catch (e) {
+        console.error('Error saving to localStorage:', e);
+      }
+    }
+  };
+  
+  // Function to load active delivery from Redis or localStorage
+  const loadActiveDelivery = async () => {
+    if (!driver.driverData?.partnerId) return;
+    
+    try {
+      // Try to get from Redis first
+      const activeOrder = await activeOrderService.getActiveOrder(driver.driverData.partnerId);
+      
+      if (activeOrder && activeOrder.orderId) {
+        // Convert the ActiveOrder to our DeliveryRequest format
+        const deliveryData: DeliveryRequest = {
+          orderId: activeOrder.orderId,
+          pickupLocation: activeOrder.pickupLocation as Location,
+          dropLocation: activeOrder.dropLocation as Location,
+          customerName: activeOrder.customerName || 'Customer',
+          amount: activeOrder.amount || 0,
+          estimatedTime: activeOrder.estimatedTime || '',
+          distance: activeOrder.distance || 0,
+          expiresIn: 0,
+          paymentMethod: activeOrder.paymentMethod || 'Cash',
+          pickupOtp: activeOrder.pickupOtp,
+          dropoffOtp: activeOrder.dropoffOtp
+        };
+        
+        setActiveDeliveryDetails(deliveryData);
+        setHasActiveDelivery(true);
+        
+        // Set status based on the stored status
+        if (activeOrder.status === 'driver_arrived' || activeOrder.status === 'driver_assigned') {
+          setDeliveryStatus('heading_to_pickup');
+        } else if (activeOrder.status === 'picked_up') {
+          setDeliveryStatus('picked_up');
+        } else if (activeOrder.status === 'completed') {
+          setDeliveryStatus('delivering');
+          
+          // If already completed, we'll remove it after a delay
+          setTimeout(() => {
+            removeActiveDelivery();
+          }, 5000);
+        }
+        
+        console.log('📦 Active delivery loaded from Redis');
+        return true;
+      }
+      
+      // If not in Redis, try localStorage
+      const localData = localStorage.getItem('driverActiveDelivery');
+      if (localData) {
+        try {
+          const parsedData = JSON.parse(localData) as DriverActiveOrder;
+          
+          // Only load if it's not completed and not too old (24 hours)
+          const MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+          if (
+            parsedData.status !== 'completed' && 
+            parsedData.driverId === driver.driverData.partnerId &&
+            Date.now() - parsedData.timestamp < MAX_AGE
+          ) {
+            const deliveryData: DeliveryRequest = {
+              orderId: parsedData.orderId,
+              pickupLocation: parsedData.pickupLocation,
+              dropLocation: parsedData.dropLocation,
+              customerName: parsedData.customerName,
+              amount: parsedData.amount,
+              estimatedTime: parsedData.estimatedTime,
+              distance: parsedData.distance,
+              expiresIn: 0,
+              paymentMethod: parsedData.paymentMethod,
+              pickupOtp: parsedData.pickupOtp,
+              dropoffOtp: parsedData.dropoffOtp
+            };
+            
+            setActiveDeliveryDetails(deliveryData);
+            setHasActiveDelivery(true);
+            setDeliveryStatus(parsedData.status === 'completed' ? 'delivering' : parsedData.status);
+            
+            // Also try to sync back to Redis
+            saveActiveDelivery(deliveryData, parsedData.status);
+            
+            console.log('📦 Active delivery loaded from localStorage');
+            return true;
+          } else {
+            // Too old or completed, remove it
+            localStorage.removeItem('driverActiveDelivery');
+          }
+        } catch (e) {
+          console.error('Error parsing local delivery data:', e);
+          localStorage.removeItem('driverActiveDelivery');
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error loading active delivery:', error);
+      
+      // Try localStorage as last resort
+      try {
+        const localData = localStorage.getItem('driverActiveDelivery');
+        if (localData) {
+          const parsedData = JSON.parse(localData) as DriverActiveOrder;
+          
+          // Only load if it's not completed and not too old (24 hours)
+          const MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+          if (
+            parsedData.status !== 'completed' && 
+            parsedData.driverId === driver.driverData.partnerId &&
+            Date.now() - parsedData.timestamp < MAX_AGE
+          ) {
+            const deliveryData: DeliveryRequest = {
+              orderId: parsedData.orderId,
+              pickupLocation: parsedData.pickupLocation,
+              dropLocation: parsedData.dropLocation,
+              customerName: parsedData.customerName,
+              amount: parsedData.amount,
+              estimatedTime: parsedData.estimatedTime,
+              distance: parsedData.distance,
+              expiresIn: 0,
+              paymentMethod: parsedData.paymentMethod,
+              pickupOtp: parsedData.pickupOtp,
+              dropoffOtp: parsedData.dropoffOtp
+            };
+            
+            setActiveDeliveryDetails(deliveryData);
+            setHasActiveDelivery(true);
+            setDeliveryStatus(parsedData.status === 'completed' ? 'delivering' : parsedData.status);
+            
+            console.log('📦 Active delivery loaded from localStorage (fallback)');
+            return true;
+          }
+        }
+      } catch (e) {
+        console.error('Error with localStorage fallback:', e);
+      }
+      
+      return false;
+    }
+  };
+  
+  // Function to remove active delivery from both Redis and localStorage
+  const removeActiveDelivery = async () => {
+    if (!driver.driverData?.partnerId) return;
+    
+    try {
+      // Remove from Redis
+      await activeOrderService.removeActiveOrder(driver.driverData.partnerId);
+      
+      // Remove from localStorage
+      localStorage.removeItem('driverActiveDelivery');
+      
+      // Update UI
+      setHasActiveDelivery(false);
+      setActiveDeliveryDetails(null);
+      
+      console.log('📦 Active delivery removed');
+    } catch (error) {
+      console.error('Error removing active delivery:', error);
+      
+      // Still try to remove from localStorage
+      localStorage.removeItem('driverActiveDelivery');
+      
+      // Update UI
+      setHasActiveDelivery(false);
+      setActiveDeliveryDetails(null);
+    }
+  };
+  
+  // Function to update delivery status
+  const updateDeliveryStatus = async (newStatus: 'heading_to_pickup' | 'picked_up' | 'delivering' | 'completed') => {
+    if (!activeDeliveryDetails || !driver.driverData?.partnerId) return;
+    
+    // Update local state
+    setDeliveryStatus(newStatus === 'completed' ? 'delivering' : newStatus);
+    
+    // Save to Redis and localStorage
+    await saveActiveDelivery(activeDeliveryDetails, newStatus);
+    
+    // If completed, schedule removal
+    if (newStatus === 'completed') {
+      setTimeout(() => {
+        removeActiveDelivery();
+      }, 5000);
+    }
+  };
+
+  // Check for driver data and active orders on component mount
+  useEffect(() => {
+    const initializeDeliveryPartner = async () => {
+      // First make sure we have driver data
+      if (Email && !driver.driverDetails) {
+        await fetchDriverDetails();
+      }
+      
+      // Then try to load any active deliveries
+      if (driver.driverData?.partnerId) {
+        const hasActiveOrder = await loadActiveDelivery();
+        if (hasActiveOrder) {
+          console.log('📦 Loaded existing active delivery');
+        }
+      }
+    };
+    
+    initializeDeliveryPartner();
+  }, [driver.driverData?.partnerId]);
 
   return (
     <div className="min-h-screen bg-gray-50">

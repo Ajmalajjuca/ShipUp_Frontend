@@ -14,13 +14,19 @@ export interface ActiveOrder {
   userId: string;
   orderId: string;
   driverId: string;
-  pickupAddress: Address;
-  dropoffAddress: Address;
+  pickupLocation: Address;
+  dropLocation: Address;
   status: 'driver_assigned' | 'driver_arrived' | 'picked_up' | 'completed';
   timestamp: number;
   vehicle: string | null;
   pickupOtp: string;
   dropoffOtp?: string;
+  distance?: number;
+  amount?: number;
+  paymentStatus?: 'pending' | 'completed' | 'failed';
+  estimatedTime?: string;
+  paymentMethod?: 'cash' | 'card' | 'upi';
+  customerName?: string;
 }
 
 // Extended interface with ttl for API requests

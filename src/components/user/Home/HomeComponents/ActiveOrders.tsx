@@ -149,6 +149,7 @@ const ActiveOrders: React.FC = () => {
         const loadActiveOrder = async () => {
             try {
                 const order = await activeOrderService.getActiveOrder(user.userId);
+                console.log('ActiveOrders: Loaded order from Redis:', order);
                 
                 if (order && order.orderId && order.driverId && order.status !== 'completed') {
                     setActiveOrder(order);
@@ -333,11 +334,11 @@ const ActiveOrders: React.FC = () => {
         // Determine Destination
         let destinationPosition: google.maps.LatLngLiteral | null = null;
         let destinationType: string = '';
-        if ((order.status === 'driver_assigned' || order.status === 'driver_arrived') && order.pickupAddress?.latitude) {
-            destinationPosition = { lat: order.pickupAddress.latitude, lng: order.pickupAddress.longitude! };
+        if ((order.status === 'driver_assigned' || order.status === 'driver_arrived') && order.pickupLocation?.latitude) {
+            destinationPosition = { lat: order.pickupLocation.latitude, lng: order.pickupLocation.longitude! };
             destinationType = 'Pickup';
-        } else if (order.status === 'picked_up' && order.dropoffAddress?.latitude) {
-            destinationPosition = { lat: order.dropoffAddress.latitude, lng: order.dropoffAddress.longitude! };
+        } else if (order.status === 'picked_up' && order.dropLocation?.latitude) {
+            destinationPosition = { lat: order.dropLocation.latitude, lng: order.dropLocation.longitude! };
             destinationType = 'Dropoff';
         }
 
@@ -417,8 +418,8 @@ const ActiveOrders: React.FC = () => {
         let url = '';
 
         if (driverPos) url = `https://www.google.com/maps?q=${driverPos.lat},${driverPos.lng}`;
-        else if (order?.pickupAddress?.latitude) url = `https://www.google.com/maps?q=${order.pickupAddress.latitude},${order.pickupAddress.longitude}`;
-        else if (order?.dropoffAddress?.latitude) url = `https://www.google.com/maps?q=${order.dropoffAddress.latitude},${order.dropoffAddress.longitude}`;
+        else if (order?.pickupLocation?.latitude) url = `https://www.google.com/maps?q=${order.pickupLocation.latitude},${order.pickupLocation.longitude}`;
+        else if (order?.dropLocation?.latitude) url = `https://www.google.com/maps?q=${order.dropLocation.latitude},${order.dropLocation.longitude}`;
 
         if (url) {
              console.log('Opening in Google Maps:', url);
@@ -484,11 +485,11 @@ const ActiveOrders: React.FC = () => {
                                     {isDriverLocValidRender && driverMarkerPosRender && activeOrder.status !== 'completed' && (
                                         <Marker position={driverMarkerPosRender} title={`Driver: ${driverData?.fullName || '...'}`} zIndex={10} icon={{ path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 7, fillColor: "#1F2937", fillOpacity: 1, strokeWeight: 2, strokeColor: "#FFFFFF" }}/>
                                     )}
-                                    {activeOrder.pickupAddress?.latitude && (
-                                        <Marker position={{ lat: activeOrder.pickupAddress.latitude, lng: activeOrder.pickupAddress.longitude! }} title="Pickup" zIndex={5} label={{ text: "P", color: "white", fontWeight: "bold", fontSize: "11px" }} icon={{ path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: "#10B981", fillOpacity: 1, strokeWeight: 1, strokeColor: '#ffffff'}}/>
+                                    {activeOrder.pickupLocation?.latitude && (
+                                        <Marker position={{ lat: activeOrder.pickupLocation.latitude, lng: activeOrder.pickupLocation.longitude! }} title="Pickup" zIndex={5} label={{ text: "P", color: "white", fontWeight: "bold", fontSize: "11px" }} icon={{ path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: "#10B981", fillOpacity: 1, strokeWeight: 1, strokeColor: '#ffffff'}}/>
                                     )}
-                                    {activeOrder.dropoffAddress?.latitude && (
-                                        <Marker position={{ lat: activeOrder.dropoffAddress.latitude, lng: activeOrder.dropoffAddress.longitude! }} title="Dropoff" zIndex={5} label={{ text: "D", color: "white", fontWeight: "bold", fontSize: "11px" }} icon={{ path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: "#EF4444", fillOpacity: 1, strokeWeight: 1, strokeColor: '#ffffff' }}/>
+                                    {activeOrder.dropLocation?.latitude && (
+                                        <Marker position={{ lat: activeOrder.dropLocation.latitude, lng: activeOrder.dropLocation.longitude! }} title="Dropoff" zIndex={5} label={{ text: "D", color: "white", fontWeight: "bold", fontSize: "11px" }} icon={{ path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: "#EF4444", fillOpacity: 1, strokeWeight: 1, strokeColor: '#ffffff' }}/>
                                     )}
 
                                     {/* ETA / Distance Overlay */}

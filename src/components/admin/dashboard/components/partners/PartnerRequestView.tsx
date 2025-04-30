@@ -114,7 +114,6 @@ const PartnerRequestView: React.FC<PartnerRequestViewProps> = ({ partnerId, onBa
     }
   };
 
-console.log('Partner details====>:', partner);
 
 
   const handleBack = () => {
