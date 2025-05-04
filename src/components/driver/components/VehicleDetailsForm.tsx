@@ -404,7 +404,7 @@ export const VehicleDetailsForm: React.FC<VehicleDetailsFormProps> = ({ initialD
           >
             <option value="">Select vehicle type</option>
             {vehicleTypes.map(type => (
-              <option key={type.id} value={type.id}>
+              <option key={type.id} value={type.label}>
                 {type.label}
               </option>
             ))}

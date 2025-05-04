@@ -19,7 +19,6 @@ import io from 'socket.io-client';
 
 // Interfaces
 interface OrderDetails {
-  // Locations
   pickupAddress: {
     addressId: string;
     street: string;
@@ -32,15 +31,11 @@ interface OrderDetails {
     latitude?: number;
     longitude?: number;
   } | null;
-  
-  // Selections
   vehicleId: string | null;
   vehicleName: string | null;
   vehiclePricePerKm: number | null;
   deliveryType: 'normal' | 'express' | null;
   paymentMethod: PaymentMethod | null;
-  
-  // Calculations
   distance: number;
   price: number;
   basePrice: number;
@@ -96,8 +91,14 @@ const OrderBooking: React.FC = () => {
   const [orderStatus, setOrderStatus] = useState<'created' | 'finding_driver' | 'driver_assigned' | 'driver_arrived' | 'picked_up' | 'completed' | null>(null);
   const [driverTracking, setDriverTracking] = useState<DriverTracking | null>(null);
   const driverLocationInterval = useRef<NodeJS.Timeout | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null); // Store orderId after creation
+  const socketRef = useRef<any>(null);
+
+
+console.log('status===>:', orderStatus);
+
   
-  // Add new state for OTP
+  // Order details state
   const [otpStatus, setOtpStatus] = useState<OtpStatus>({
     pickupOtp: null,
     dropoffOtp: null,
@@ -105,7 +106,6 @@ const OrderBooking: React.FC = () => {
     dropoffVerified: false
   });
   
-  // Order details state
   const [orderDetails, setOrderDetails] = useState<OrderDetails>({
     pickupAddress: null,
     dropoffAddress: null,
@@ -128,11 +128,9 @@ const OrderBooking: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Load pricing config
         const config = await orderService.getPricingConfig();
         setPricingConfig(config);
         
-        // Load vehicles
         const vehicleResponse = await vehicleService.getVehicles();
         if (vehicleResponse.success && vehicleResponse.vehicles) {
           const vehicleData = vehicleResponse.vehicles.map(vehicle => ({
@@ -155,8 +153,8 @@ const OrderBooking: React.FC = () => {
     loadData();
   }, []);
   
+  // Calculate distance when addresses are selected
   useEffect(() => {
-    // Calculate distance if both pickup and dropoff locations are selected
     if (orderDetails.pickupAddress && orderDetails.dropoffAddress &&
         orderDetails.pickupAddress.latitude && orderDetails.pickupAddress.longitude &&
         orderDetails.dropoffAddress.latitude && orderDetails.dropoffAddress.longitude) {
@@ -175,8 +173,8 @@ const OrderBooking: React.FC = () => {
     }
   }, [orderDetails.pickupAddress, orderDetails.dropoffAddress]);
   
+  // Calculate price when dependencies change
   useEffect(() => {
-    // Calculate price if distance, vehicle ID, delivery type, and pricing config are available
     if (
       orderDetails.distance > 0 && 
       orderDetails.vehicleId && 
@@ -184,33 +182,20 @@ const OrderBooking: React.FC = () => {
       orderDetails.deliveryType && 
       pricingConfig
     ) {
-      // Get rates from pricing config
       const vehicleRate = orderDetails.vehiclePricePerKm;
       const deliveryMultiplier = pricingConfig.deliveryMultipliers[orderDetails.deliveryType];
       const gstRate = pricingConfig.taxRates.gst;
       const commissionRate = pricingConfig.taxRates.commission;
       const minimumDistance = pricingConfig.minimumDistance;
       
-      // Apply minimum distance if actual distance is less than minimum
       const effectiveDistance = Math.max(orderDetails.distance, minimumDistance);
-      
-      // Calculate base price using effective distance
       const basePrice = effectiveDistance * vehicleRate;
-      
-      // Apply delivery type multiplier
       const deliveryPrice = basePrice * deliveryMultiplier;
-      
-      // Calculate commission
       const commission = deliveryPrice * commissionRate;
-      
-      // Calculate GST on (delivery price + commission)
       const gstAmount = (deliveryPrice + commission) * gstRate;
-      
-      // Calculate final price with GST
       const finalPrice = deliveryPrice + commission + gstAmount;
       
-      // Get vehicle average speed based on type (assuming from vehicle name)
-      let speedKmPerHour = 30; // Default
+      let speedKmPerHour = 30;
       const vehicleName = orderDetails.vehicleName?.toLowerCase() || '';
       
       if (vehicleName.includes('bike') || vehicleName.includes('cycle')) {
@@ -221,10 +206,7 @@ const OrderBooking: React.FC = () => {
         speedKmPerHour = 30;
       }
       
-      // Adjustment for delivery type
       const timeMultiplier = orderDetails.deliveryType === 'express' ? 0.8 : 1;
-      
-      // Calculate hours then convert to hours and minutes
       const timeInHours = (effectiveDistance / speedKmPerHour) * timeMultiplier;
       const hours = Math.floor(timeInHours);
       const minutes = Math.round((timeInHours - hours) * 60);
@@ -246,18 +228,35 @@ const OrderBooking: React.FC = () => {
     }
   }, [orderDetails.distance, orderDetails.vehicleId, orderDetails.vehiclePricePerKm, orderDetails.deliveryType, pricingConfig]);
   
-  // Calculate distance between two coordinates using Haversine formula
+  // Update order status in database whenever orderStatus changes
+  // useEffect(() => {
+  //   if (orderStatus && orderId) {
+  //     const updateOrderStatusInDB = async () => {
+  //       try {
+  //         await axios.patch(`http://localhost:3004/api/orders/${orderId}`, {
+  //           status: orderStatus
+  //         });
+  //         console.log(`Order status updated in DB===>: ${orderStatus}`);
+  //       } catch (error) {
+  //         console.error('Error updating order status in DB:', error);
+  //         toast.error('Failed to update order status. Please contact support.');
+  //       }
+  //     };
+  //     updateOrderStatusInDB();
+  //   }
+  // }, [orderStatus, orderId]);
+  
+  // Calculate distance using Haversine formula
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371; // Radius of the earth in km
+    const R = 6371;
     const dLat = deg2rad(lat2 - lat1);
     const dLon = deg2rad(lon2 - lon1);
     const a = 
       Math.sin(dLat/2) * Math.sin(dLat/2) +
       Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2)
-    ; 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-    const distance = R * c; // Distance in km
+    const distance = R * c;
     return distance;
   };
   
@@ -273,7 +272,7 @@ const OrderBooking: React.FC = () => {
     }));
   };
   
-  // Handle selection of a vehicle
+  // Handle vehicle selection
   const handleVehicleSelect = (vehicleId: string) => {
     const selectedVehicle = vehicles.find(v => v.id === vehicleId);
     if (selectedVehicle) {
@@ -296,7 +295,6 @@ const OrderBooking: React.FC = () => {
   
   // Handle next step
   const handleNextStep = () => {
-    // Validate current step before proceeding
     if (currentStep === 1) {
       if (!orderDetails.pickupAddress || !orderDetails.dropoffAddress) {
         toast.error('Please select both pickup and dropoff locations');
@@ -319,7 +317,6 @@ const OrderBooking: React.FC = () => {
       }
     }
     
-    // Move to next step
     setCurrentStep(prev => prev + 1);
   };
   
@@ -328,27 +325,22 @@ const OrderBooking: React.FC = () => {
     setCurrentStep(prev => Math.max(1, prev - 1));
   };
   
-  // New function to generate OTP
+  // Generate OTP
   const generateOtp = (): string => {
-    // Generate a 4-digit OTP
     return Math.floor(1000 + Math.random() * 9000).toString();
   };
 
-  // Function to handle driver arrival at pickup location
+  // Handle driver arrival at pickup location
   const handleDriverArrived = (orderId: string) => {
-    // Generate pickup OTP
     const pickupOtp = generateOtp();
     
-    // Update OTP status
     setOtpStatus(prev => ({
       ...prev,
       pickupOtp: pickupOtp
     }));
     
-    // Update order status
     setOrderStatus('driver_arrived');
     
-    // Notify server about OTP generation
     axios.post(`http://localhost:3003/api/orders/${orderId}/otp`, {
       type: 'pickup',
       otp: pickupOtp
@@ -359,25 +351,21 @@ const OrderBooking: React.FC = () => {
     toast.success('Driver has arrived at pickup location!');
   };
   
-  // Function to handle pickup verification
+  // Handle pickup verification
   const handlePickupVerified = (orderId: string) => {
-    // Update OTP status
     setOtpStatus(prev => ({
       ...prev,
       pickupVerified: true
     }));
     
-    // Update order status
     setOrderStatus('picked_up');
     
-    // Generate dropoff OTP
     const dropoffOtp = generateOtp();
     setOtpStatus(prev => ({
       ...prev,
       dropoffOtp: dropoffOtp
     }));
     
-    // Notify server about OTP generation
     axios.post(`http://localhost:3003/api/orders/${orderId}/otp`, {
       type: 'dropoff',
       otp: dropoffOtp
@@ -385,20 +373,16 @@ const OrderBooking: React.FC = () => {
       console.error('Error saving dropoff OTP:', error);
     });
     
-    // Update active order status in Redis if user is available
     if (user?.userId) {
-      // First get current active order
       activeOrderService.getActiveOrder(user.userId)
         .then(activeOrder => {
           if (activeOrder) {
-            // Update status and add dropoff OTP
             const updatedOrder: ActiveOrder = {
               ...activeOrder,
               status: 'picked_up',
               dropoffOtp: dropoffOtp
             };
             
-            // Store updated order
             return activeOrderService.storeActiveOrder(user.userId, updatedOrder);
           }
           return false;
@@ -411,53 +395,40 @@ const OrderBooking: React.FC = () => {
     toast.success('Package has been picked up!');
   };
   
-  // Function to handle delivery completion
+  // Handle delivery completion
   const handleDeliveryCompleted = (orderId: string) => {
-    // Update OTP status
     setOtpStatus(prev => ({
       ...prev,
       dropoffVerified: true
     }));
     
-    // Update order status
     setOrderStatus('completed');
+    console.log('Order status set to completed');
     
-    // Update active order status in Redis if user is available
     if (user?.userId) {
-      // First get current active order
       activeOrderService.getActiveOrder(user.userId)
         .then(activeOrder => {
           if (activeOrder) {
-            // Update status
             const updatedOrder: ActiveOrder = {
               ...activeOrder,
               status: 'completed'
             };
             
-            // Store updated order with shorter TTL since it's completed
-            return activeOrderService.storeActiveOrder(user.userId, updatedOrder, 3600); // 1 hour TTL
+            return activeOrderService.storeActiveOrder(user.userId, updatedOrder, 3600);
           }
           return false;
         })
         .then(() => {
-          // After a delay, remove the active order completely
-          setTimeout(() => {
-            if (user?.userId) {
-              activeOrderService.removeActiveOrder(user.userId).catch(console.error);
-            }
-          }, 5000);
+          return activeOrderService.removeActiveOrder(user.userId);
         })
         .catch(error => {
-          console.error('Error updating active order after completion:', error);
+          console.error('Error handling active order after completion:', error);
         });
     }
     
     toast.success('Delivery has been completed!');
-    
-    // Navigate to orders page after a delay
-    setTimeout(() => {
-      navigate('/orders');
-    }, 3000);
+    setOrderStatus('completed');
+    navigate('/orders');
   };
   
   // Submit order function
@@ -475,7 +446,6 @@ const OrderBooking: React.FC = () => {
     setOrderStatus('created');
     
     try {
-      // Create order input data for API
       const orderInput: OrderInput = {
         pickupAddress: {
           street: orderDetails.pickupAddress.street,
@@ -490,6 +460,7 @@ const OrderBooking: React.FC = () => {
         pickupAddressId: orderDetails.pickupAddress.addressId,
         dropoffAddressId: orderDetails.dropoffAddress.addressId,
         vehicleId: orderDetails.vehicleId,
+        vehicleName: orderDetails.vehicleName,
         deliveryType: orderDetails.deliveryType,
         distance: orderDetails.distance,
         price: orderDetails.price,
@@ -502,39 +473,29 @@ const OrderBooking: React.FC = () => {
         paymentStatus: isPrePaymentMethod(orderDetails.paymentMethod) ? 'pending' : 'not_required'
       };
       
-      // Call API to create order with userId
       const response = await orderService.createOrder(orderInput, user.userId);
       console.log('Order creation response:', response);
       
       if (response.success) {
+        setOrderId(response.data.orderId); // Store orderId
         toast.success('Order placed successfully!');
         
-        // Process payment for pre-payment methods
         if (isPrePaymentMethod(orderDetails.paymentMethod)) {
-          // For Razorpay
           if (orderDetails.paymentMethod === 'razorpay') {
-            // Call function to initialize Razorpay - this would be implemented separately
-            // initiateRazorpayPayment(response.order.id, orderDetails.price);
             toast.success('Redirecting to payment gateway...');
-          } 
-          // For wallet
-          else if (orderDetails.paymentMethod === 'wallet') {
-            // Process wallet payment
+          } else if (orderDetails.paymentMethod === 'wallet') {
             toast.success('Processing wallet payment...');
           }
         }
         
-        // Set order status to searching for driver
         setOrderStatus('finding_driver');
         
-        // Find and assign a driver for the order
         findDriver(response.data.orderId, {
           pickupLatitude: orderDetails.pickupAddress.latitude || 0,
           pickupLongitude: orderDetails.pickupAddress.longitude || 0,
           vehicleType: orderDetails.vehicleName || 'standard'
         });
         
-        // Subscribe to real-time order updates via WebSocket to get notified of driver arrival, etc.
         subscribeToOrderUpdates(response.data.orderId);
       } else {
         toast.error(response.message || 'Failed to place order');
@@ -554,9 +515,8 @@ const OrderBooking: React.FC = () => {
     vehicleType: string;
   }) => {
     try {
-      console.log('Finding driver for order:', orderId);
+      console.log('Finding driver for order:', orderId, 'location:', orderLocation);
       
-      // Call the partner service to find available drivers
       const response = await axios.post(`http://localhost:3003/api/drivers/assign-driver`, {
         orderId: orderId,
         pickupLocation: {
@@ -564,8 +524,8 @@ const OrderBooking: React.FC = () => {
           longitude: orderLocation.pickupLongitude
         },
         vehicleType: orderLocation.vehicleType,
-        maxDistance: 10, // Maximum distance in km to look for drivers
-        maxWaitTime: 60 // Maximum time in seconds to wait for a driver
+        maxDistance: 10,
+        maxWaitTime: 60
       });
       console.log('Driver request response:', response.data);
       
@@ -576,7 +536,6 @@ const OrderBooking: React.FC = () => {
         setOrderStatus('finding_driver');
         toast.success('Looking for nearby drivers...');
         
-        // Connect to WebSocket to listen for driver acceptance
         const socket = io('http://localhost:3003', {
           path: '/socket',
           transports: ['websocket'],
@@ -586,47 +545,36 @@ const OrderBooking: React.FC = () => {
         socket.on('connect', () => {
           console.log('WebSocket connected for driver assignment');
           
-          // Join the order-specific room
           socket.emit('join_order_room', {
             orderId,
             userId: user?.userId || user?._id
           });
         });
         
-        // Set a timeout for driver acceptance
         const driverAcceptanceTimeout = setTimeout(() => {
           toast.error('No driver accepted your request. We\'ll try again with another driver.');
           setOrderStatus('created');
           socket.disconnect();
-          
-          // Try to find another driver
-          // This could be implemented by calling findDriver again or showing a manual retry button
-        }, 45000); // 45 seconds timeout
+          navigate('/orders');
+        }, 45000);
         
-        // Listen for driver response
         socket.on('driver_response', (data: DriverResponseData) => {
           console.log('Driver response:', data);
           
           if (data.accepted) {
-            // Driver accepted the request
             clearTimeout(driverAcceptanceTimeout);
             setOrderStatus('driver_assigned');
             toast.success('Driver assigned to your order!');
             
-            // Start driver location updates immediately
             startDriverLocationUpdates(orderId, data.partnerId);
-            
-            // Fetch driver details to initialize tracking
             fetchDriverDetails(data.partnerId, orderId);
             
-            // Generate pickup OTP right away
             const pickupOtp = generateOtp();
             setOtpStatus(prev => ({
               ...prev,
               pickupOtp: pickupOtp
             }));
             
-            // Save OTP to server
             axios.post(`http://localhost:3003/api/orders/${orderId}/otp`, {
               type: 'pickup',
               otp: pickupOtp
@@ -634,7 +582,17 @@ const OrderBooking: React.FC = () => {
               console.error('Error saving pickup OTP:', error);
             });
             
-            // Store active order in Redis (with localStorage fallback via service)
+            axios.patch(`http://localhost:3004/api/orders/${orderId}`, {
+              driverId: data.partnerId,
+            })
+              .then(response => {
+                console.log('Order updated with driverId:', response.data);
+              })
+              .catch(error => {
+                console.error('Error updating order with driverId:', error);
+                toast.error('Failed to update order with driver information.');
+              });
+            
             if (user?.userId) {
               const activeOrderData: ActiveOrder = {
                 userId: user.userId,
@@ -648,72 +606,45 @@ const OrderBooking: React.FC = () => {
                 pickupOtp: pickupOtp
               };
               
-              // Use the activeOrderService to store the order data
               activeOrderService.storeActiveOrder(user.userId, activeOrderData)
                 .then(success => {
                   if (success) {
                     console.log('Active order data stored successfully');
                   } else {
-                    console.warn('Failed to store active order data in Redis, using localStorage fallback');
+                    console.warn('Failed to store active order data in Redis');
                   }
                 })
                 .catch(error => {
                   console.error('Error storing active order data:', error);
                 });
-            } else {
-              // Fallback to localStorage if no user ID is available
-              console.log('Storing active order in localStorage as user ID is not available');
-              localStorage.setItem('activeOrder', JSON.stringify({
-                orderId,
-                driverId: data.partnerId,
-                pickupAddress: orderDetails.pickupAddress,
-                dropoffAddress: orderDetails.dropoffAddress,
-                status: 'driver_assigned',
-                timestamp: Date.now(),
-                vehicle: orderDetails.vehicleName,
-                pickupOtp: pickupOtp
-              }));
             }
             
-            // Wait a moment to show success message before redirecting
             setTimeout(() => {
-              // Navigate to home page to show active order
               navigate('/home');
             }, 2000);
           } else {
-            // Driver rejected the request
             toast.error('Driver rejected the request. Looking for another driver...');
-            // System will automatically try the next available driver
           }
         });
         
-        // Listen for status updates
         socket.on('order_status_updated', (data: OrderStatusUpdateData) => {
           console.log('Order status updated:', data);
           
           if (data.status === 'driver_rejected') {
-            toast.error('Driver is not available. System is trying the next available driver...');
+            toast.error('Driver is not available. Trying the next available driver...');
           } else if (data.status === 'no_drivers_available') {
             toast.error('No more drivers are available. Our team will assign a driver manually.');
-            
-            // Set order status to created so user knows manual assignment is needed
             setOrderStatus('created');
-            
-            // Wait a moment then navigate to orders page
             setTimeout(() => {
               navigate('/orders');
             }, 4000);
           }
         });
         
-        // Return the socket so it can be closed later if needed
         return socket;
       } else {
         console.log('Driver assignment failed:', result);
-        // Show error and fallback to manual assignment
         toast.error('No drivers available. Our team will assign a driver manually.');
-        
-        // Wait a moment then navigate to orders page
         setTimeout(() => {
           navigate('/orders');
         }, 4000);
@@ -721,34 +652,27 @@ const OrderBooking: React.FC = () => {
     } catch (error) {
       console.error('Error finding driver:', error);
       toast.error('We could not find a driver automatically. Our team will handle your order.');
-      
-      // Wait a moment then navigate to orders page anyway
       setTimeout(() => {
         navigate('/orders');
       }, 4000);
     }
   };
   
-  // Fetch driver details after they accept the request
+  // Fetch driver details
   const fetchDriverDetails = async (driverId: string, orderId: string) => {
     try {
-      // Fetch driver details using the driver ID from the response
       const driverResponse = await axios.get(`http://localhost:3003/api/drivers/${driverId}`);
       const driverData = driverResponse.data.partner;
       console.log('Driver details:', driverData);
       
       if (driverData) {
-        // Calculate estimated arrival time based on distance
-        const distance = driverData.distance || 3; // Default to 3 km if no distance info
-        let estimatedMinutes = Math.round(distance * 3); // Rough estimate: 3 minutes per km
+        const distance = driverData.distance || 3;
+        let estimatedMinutes = Math.round(distance * 3);
         if (estimatedMinutes < 1) estimatedMinutes = 1;
         const estimatedArrival = `${estimatedMinutes} min`;
         
-        // Get pickup coordinates safely
         const pickupLat = orderDetails.pickupAddress?.latitude || 0;
         const pickupLng = orderDetails.pickupAddress?.longitude || 0;
-        
-        // Get driver coordinates safely
         const driverLat = driverData.location?.coordinates?.[1] || pickupLat;
         const driverLng = driverData.location?.coordinates?.[0] || pickupLng;
         
@@ -768,10 +692,7 @@ const OrderBooking: React.FC = () => {
         
         setDriverTracking(initialDriverData);
         console.log('Driver tracking initialized:', initialDriverData);
-        
-        // Note: we don't start location updates here, as it's already started in the driver_response handler
       } else {
-        // Fallback if driver details aren't available
         toast.error('Driver details not available. Please contact support.');
       }
     } catch (error) {
@@ -782,7 +703,6 @@ const OrderBooking: React.FC = () => {
   
   // Start polling for driver location updates
   const startDriverLocationUpdates = (orderId: string, driverId: string) => {
-    // Clear any existing interval
     if (driverLocationInterval.current) {
       clearInterval(driverLocationInterval.current);
     }
@@ -792,10 +712,8 @@ const OrderBooking: React.FC = () => {
     
     console.log(`Starting location updates for driver ${driverId} on order ${orderId}`);
     
-    // Poll for driver location every 5 seconds
     driverLocationInterval.current = setInterval(async () => {
       try {
-        // Use the existing driver endpoint to get updated location
         const response = await axios.get(`http://localhost:3003/api/drivers/${driverId}`);
         const driverData = response.data?.partner;
         
@@ -804,26 +722,20 @@ const OrderBooking: React.FC = () => {
           failedAttempts++;
           
           if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
-            console.error(`Maximum failed attempts (${MAX_FAILED_ATTEMPTS}) reached for driver location updates`);
             clearInterval(driverLocationInterval.current!);
             driverLocationInterval.current = null;
           }
           return;
         }
         
-        // Reset failure counter on success
         failedAttempts = 0;
         
-        console.log('Driver location update:', driverData);
-        
-        // Check if driver has location data
         if (driverData.location && driverData.location.coordinates) {
           const driverLat = driverData.location.coordinates[1];
           const driverLng = driverData.location.coordinates[0];
           const pickupLat = orderDetails.pickupAddress?.latitude || 0;
           const pickupLng = orderDetails.pickupAddress?.longitude || 0;
           
-          // Calculate distance using Haversine formula
           const distance = calculateDistance(
             driverLat,
             driverLng,
@@ -831,13 +743,10 @@ const OrderBooking: React.FC = () => {
             pickupLng
           );
           
-          // Calculate estimated arrival time based on distance
-          let estimatedMinutes = Math.round(distance * 3); // Rough estimate: 3 minutes per km
+          let estimatedMinutes = Math.round(distance * 3);
           if (estimatedMinutes < 1) estimatedMinutes = 1;
           const estimatedArrival = `${estimatedMinutes} min`;
           
-          // Create an updated driver info object
-          // Don't rely on existing driverTracking state as it might be null
           const updatedDriverInfo: DriverTracking = {
             driverId: driverId,
             driverName: driverData?.fullName || 'Your Driver',
@@ -852,10 +761,9 @@ const OrderBooking: React.FC = () => {
             phone: driverData?.mobileNumber
           };
           
-          // Update the driver tracking state
           setDriverTracking(updatedDriverInfo);
+          console.log('Driver tracking updated:', updatedDriverInfo);
           
-          // If we're not already in driver_assigned status, set it
           if (orderStatus !== 'driver_assigned' && orderStatus !== 'driver_arrived' && orderStatus !== 'picked_up') {
             setOrderStatus('driver_assigned');
           }
@@ -864,12 +772,9 @@ const OrderBooking: React.FC = () => {
           failedAttempts++;
           
           if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
-            console.error(`Maximum failed attempts (${MAX_FAILED_ATTEMPTS}) reached for driver location updates`);
             clearInterval(driverLocationInterval.current!);
             driverLocationInterval.current = null;
-            
-            // Still maintain the driver assigned status, just won't have live updates
-            toast.error('Live driver location updates are not available. Please contact support if needed.');
+            toast.error('Live driver location updates are not available.');
           }
         }
       } catch (error) {
@@ -877,12 +782,9 @@ const OrderBooking: React.FC = () => {
         failedAttempts++;
         
         if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
-          console.error(`Maximum failed attempts (${MAX_FAILED_ATTEMPTS}) reached for driver location updates`);
           clearInterval(driverLocationInterval.current!);
           driverLocationInterval.current = null;
-          
-          // Show a message to the user
-          toast.error('Unable to track driver location. Please contact support if needed.');
+          toast.error('Unable to track driver location.');
         }
       }
     }, 5000);
@@ -902,7 +804,7 @@ const OrderBooking: React.FC = () => {
     return ['razorpay', 'wallet'].includes(method);
   };
   
-  // Get the progress based on current step (now 5 steps total)
+  // Get the progress based on current step
   const getProgress = () => {
     return (currentStep / 5) * 100;
   };
@@ -944,7 +846,7 @@ const OrderBooking: React.FC = () => {
       case 5:
         return (
           <OrderSummary 
-            orderDetails={orderDetails as any} // Type cast to avoid error with OrderSummary component
+            orderDetails={orderDetails as any}
             onSubmit={submitOrder}
             isLoading={isLoading}
             onBack={handlePreviousStep}
@@ -955,48 +857,71 @@ const OrderBooking: React.FC = () => {
     }
   };
   
-  // New function to subscribe to real-time order updates
+  // Subscribe to real-time order updates
   const subscribeToOrderUpdates = (orderId: string) => {
-    // Connect to WebSocket server
+
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+
+    
     const socket = io('http://localhost:3003', {
       path: '/socket',
       transports: ['websocket'],
       reconnection: true
     });
     
+    socketRef.current = socket; 
+
     socket.on('connect', () => {
       console.log('WebSocket connected for order updates');
       
-      // Join the order-specific room
       socket.emit('join_order_room', {
         orderId,
         userId: user?.userId || user?._id
       });
     });
     
-    // Listen for driver arrival at pickup
-    socket.on('driver_arrived_pickup', () => {
+    socket.on('driver_arrived_pickup', (data) => {
+      console.log('Received driver_arrived_pickup event for order:', orderId);
+      
+      if (data.orderId === orderId) {
       handleDriverArrived(orderId);
+    }
     });
     
-    // Listen for pickup verification
-    socket.on('pickup_verified', () => {
-      handlePickupVerified(orderId);
+    socket.on('pickup_verified', (data) => {
+      console.log('Received pickup_verified event for order:', orderId);
+      
+      if (data.orderId === orderId) {
+        handlePickupVerified(orderId);
+      }
     });
     
-    // Listen for delivery completion
-    socket.on('delivery_completed', () => {
-      handleDeliveryCompleted(orderId);
+    socket.on('delivery_completed', (data) => {
+      console.log('Received delivery_completed event for order:', orderId);
+      if (data.orderId === orderId) {
+        handleDeliveryCompleted(orderId);
+      }
     });
     
-    // Clean up on component unmount
-    return () => {
-      socket.disconnect();
-    };
+ 
   };
+
+  useEffect(() => {
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+      if (driverLocationInterval.current) {
+        clearInterval(driverLocationInterval.current);
+      }
+    };
+  }, []);
   
-  // Render order status if order has been created and waiting for driver
+  // Render order status
   const renderOrderStatus = () => {
+    console.log('Rendering order status:', { orderStatus, driverTracking });
     if (!orderStatus) return null;
     
     return (
@@ -1042,123 +967,12 @@ const OrderBooking: React.FC = () => {
               {orderStatus === 'completed' && 'Delivery completed!'}
             </h3>
             
-            {orderStatus === 'finding_driver' && (
-              <p className="text-gray-600 mb-4">
-                We are searching for the nearest available driver for your order.
-              </p>
-            )}
-            
-            {orderStatus === 'driver_arrived' && (
-              <div className="mt-4">
-                <p className="text-gray-600 mb-4">
-                  Your driver has arrived at the pickup location. Please share this OTP with the driver.
-                </p>
-                <div className="bg-blue-50 p-4 rounded-lg mb-4">
-                  <p className="text-sm text-gray-600 mb-1">Pickup OTP</p>
-                  <p className="text-2xl font-bold tracking-widest flex justify-center">
-                    {otpStatus.pickupOtp?.split('').map((digit, idx) => (
-                      <span key={idx} className="w-12 h-12 bg-white flex items-center justify-center rounded border border-blue-200 mx-1">{digit}</span>
-                    ))}
-                  </p>
-                </div>
-              </div>
-            )}
-            
-            {orderStatus === 'picked_up' && (
-              <div className="mt-4">
-                <p className="text-gray-600 mb-4">
-                  Your package has been picked up and is on the way to the destination. 
-                </p>
-                <div className="bg-indigo-50 p-4 rounded-lg mb-4">
-                  <p className="text-sm text-gray-600 mb-1">Dropoff OTP</p>
-                  <p className="text-2xl font-bold tracking-widest flex justify-center">
-                    {otpStatus.dropoffOtp?.split('').map((digit, idx) => (
-                      <span key={idx} className="w-12 h-12 bg-white flex items-center justify-center rounded border border-indigo-200 mx-1">{digit}</span>
-                    ))}
-                  </p>
-                </div>
-                <p className="text-sm text-gray-500">
-                  Please share this OTP with the driver when they arrive at the delivery location.
-                </p>
-              </div>
-            )}
-            
-            {orderStatus === 'driver_assigned' && driverTracking && (
-              <div className="mt-4">
-                {/* Driver Details */}
-                <div className="flex items-center justify-center mb-4">
-                  <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center overflow-hidden mr-3">
-                    {driverTracking.profileImage ? (
-                      <img 
-                        src={driverTracking.profileImage} 
-                        alt={driverTracking.driverName}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                          (e.target as HTMLImageElement).parentElement!.innerHTML = `<span className="text-2xl text-blue-500">${driverTracking.driverName.charAt(0)}</span>`;
-                        }}
-                      />
-                    ) : (
-                      <span className="text-2xl text-blue-500">{driverTracking.driverName.charAt(0)}</span>
-                    )}
-                  </div>
-                  <div className="text-left">
-                    <p className="font-medium">{driverTracking.driverName}</p>
-                    <p className="text-sm text-gray-600">{driverTracking.vehicle}</p>
-                  </div>
-                </div>
-                
-                {/* Live tracking details */}
-                <div className="bg-gray-50 rounded-lg p-4 mb-4 text-left">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center">
-                      <MapPin size={16} className="text-red-500 mr-2" />
-                      <span className="text-sm">Driver's Location</span>
-                    </div>
-                    <span className="text-sm font-medium">{driverTracking.distance.toFixed(1)} km away</span>
-                  </div>
-                  
-                  <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
-                    <div 
-                      className="bg-blue-500 h-2 rounded-full transition-all duration-500 ease-in-out" 
-                      style={{ width: `${Math.min(100, 100 - (driverTracking.distance * 10))}%` }}
-                    ></div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center text-sm text-gray-600">
-                    <span>On the way</span>
-                    <span>{driverTracking.estimatedArrival}</span>
-                  </div>
-                </div>
-                
-                {/* Map Button */}
-                <a 
-                  href={`https://www.google.com/maps/search/?api=1&query=${driverTracking.location.latitude},${driverTracking.location.longitude}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full py-2 px-4 bg-blue-50 text-blue-600 rounded-lg font-medium mb-2 hover:bg-blue-100 transition-colors text-center"
-                >
-                  <Map size={16} className="inline-block mr-2" />
-                  View Driver on Map
-                </a>
-                
-                {/* Call Button */}
-                {driverTracking.phone && (
-                  <a 
-                    href={`tel:${driverTracking.phone}`}
-                    className="block w-full py-2 px-4 bg-green-50 text-green-600 rounded-lg font-medium hover:bg-green-100 transition-colors text-center"
-                  >
-                    <Phone size={16} className="inline-block mr-2" />
-                    Call Driver
-                  </a>
-                )}
-              </div>
-            )}
-            
             {orderStatus === 'completed' && (
-              <p className="text-gray-600 mb-4">
-                Your delivery has been completed successfully! Thank you for using our service.
-              </p>
+              <div>
+                <p className="text-gray-600 mb-4">
+                  Your delivery has been completed successfully! Thank you for using our service.
+                </p>
+              </div>
             )}
           </div>
         </div>
@@ -1168,21 +982,16 @@ const OrderBooking: React.FC = () => {
   
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Navbar */}
       <NavBar />
-      
       <div className="flex-grow">
         <div className="max-w-4xl mx-auto px-4 py-6">
           <div className="bg-white rounded-xl shadow-md overflow-hidden">
-            {/* Progress bar */}
             <div className="w-full h-2 bg-gray-200">
               <div 
                 className="h-full bg-red-500 transition-all duration-300"
                 style={{ width: `${getProgress()}%` }}
               ></div>
             </div>
-            
-            {/* Steps indicator */}
             <div className="flex justify-between px-8 pt-6">
               <div className={`flex flex-col items-center ${currentStep >= 1 ? 'text-red-500' : 'text-gray-400'}`}>
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${currentStep >= 1 ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}>
@@ -1215,13 +1024,9 @@ const OrderBooking: React.FC = () => {
                 <span className="text-xs mt-1">Summary</span>
               </div>
             </div>
-            
-            {/* Current step content */}
             <div className="p-6">
               {renderStep()}
             </div>
-            
-            {/* Navigation buttons */}
             {currentStep < 5 && (
               <div className="flex justify-between p-6 border-t">
                 <button
@@ -1246,14 +1051,10 @@ const OrderBooking: React.FC = () => {
           </div>
         </div>
       </div>
-      
-      {/* Order Status Overlay */}
       {renderOrderStatus()}
-      
-      {/* Footer */}
       <Footer />
     </div>
   );
 };
 
-export default OrderBooking; 
+export default OrderBooking;

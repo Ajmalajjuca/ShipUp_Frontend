@@ -102,6 +102,7 @@ export interface OrderInput {
     longitude?: number;
   };
   vehicleId: string;
+  vehicleName: string | null; 
   deliveryType: 'normal' | 'express';
   distance: number;
   price: number;
@@ -303,6 +304,7 @@ export const orderService = {
       const orderPayload = {
         userId,
         vehicleId: orderInput.vehicleId,
+        vehicleName: orderInput.vehicleName,
         pickupAddress: orderInput.pickupAddress,
         dropoffAddress: orderInput.dropoffAddress,
         price: orderInput.price,

@@ -20,6 +20,8 @@ import PrivateRoute from './PrivateRoute';
 import PrivatePartnerRoute from './PrivatePartnerRoute';
 import AuthRoute from './AuthRoute';
 import PartnerProfile from '../components/driver/components/PartnerProfile';
+import OrdersList from '../components/user/Orders/OrdersList';
+import OrderDetails from '../components/user/Orders/OrderDetails';
 
 const AppRoutes = () => {
   return (
@@ -37,8 +39,10 @@ const AppRoutes = () => {
       <Route path="/address/add" element={<PrivateRoute><AddAddressForm /></PrivateRoute>} />
       <Route path="/address/edit/:addressId" element={<PrivateRoute><EditAddressForm /></PrivateRoute>} />
       <Route path="/book" element={<PrivateRoute><OrderBooking /></PrivateRoute>} />
-      <Route path="/orders" element={<PrivateRoute><ShipUpApp /></PrivateRoute>} />
+      <Route path="/orders" element={<PrivateRoute><OrdersList /></PrivateRoute>} />
+      <Route path="/order-details/:orderId" element={<PrivateRoute><OrderDetails /></PrivateRoute>} />
       
+      {/* Public Routes */}      
       {/* Partner Routes */}
       <Route path="/register" element={<PartnerReg />} />
       <Route path="/partner" element={<PartnerLog />} />

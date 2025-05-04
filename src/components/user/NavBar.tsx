@@ -18,7 +18,7 @@ const NavBar = () => {
         {/* Navigation Links */}
         <div className="hidden md:flex space-x-6">
           <span onClick={() => navigate("/home")} className="cursor-pointer text-gray-800 hover:text-red-400">Home</span>
-          <span onClick={() => navigate("/order")} className="cursor-pointer text-gray-800 hover:text-red-400">Order</span>
+          <span onClick={() => navigate("/orders")} className="cursor-pointer text-gray-800 hover:text-red-400">Order</span>
           <span onClick={() => navigate("/support")} className="cursor-pointer text-gray-800 hover:text-red-400">Support</span>
           <span onClick={() => navigate("/payments")} className="cursor-pointer text-gray-800 hover:text-red-400">Payments</span>
           <span onClick={() => navigate("/about")} className="cursor-pointer text-gray-800 hover:text-red-400">About</span>

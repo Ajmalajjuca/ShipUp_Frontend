@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Autocomplete, useJsApiLoader } from '@react-google-maps/api';
+import { Autocomplete } from '@react-google-maps/api';
 import { useNavigate } from 'react-router-dom';
-
-const libraries: ("places")[] = ["places"];
+import { useGoogleMaps } from '../../../../contexts/GoogleMapsProvider';
 
 const Calculator: React.FC = () => {
   const navigate = useNavigate();
@@ -15,10 +14,7 @@ const Calculator: React.FC = () => {
   const originRef = useRef<google.maps.places.Autocomplete | null>(null);
   const destinationRef = useRef<google.maps.places.Autocomplete | null>(null);
 
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries,
-  });
+  const { isLoaded } = useGoogleMaps();
 
   useEffect(() => {
     if (isLoaded) {
@@ -73,7 +69,7 @@ const Calculator: React.FC = () => {
             <div>
               <p className="text-gray-500 mb-2">Origin</p>
               <div className="relative">
-                {isLoaded && (
+                {isLoaded ? (
                   <Autocomplete onLoad={(auto) => (originRef.current = auto)}>
                     <input
                       type="text"
@@ -83,6 +79,13 @@ const Calculator: React.FC = () => {
                       onChange={(e) => setOrigin(e.target.value)}
                     />
                   </Autocomplete>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="Loading..."
+                    className="w-full pl-10 pr-4 py-2 border rounded-md"
+                    disabled
+                  />
                 )}
               </div>
             </div>
@@ -90,7 +93,7 @@ const Calculator: React.FC = () => {
             <div>
               <p className="text-gray-500 mb-2">Destination</p>
               <div className="relative">
-                {isLoaded && (
+                {isLoaded ? (
                   <Autocomplete onLoad={(auto) => (destinationRef.current = auto)}>
                     <input
                       type="text"
@@ -100,6 +103,13 @@ const Calculator: React.FC = () => {
                       onChange={(e) => setDestination(e.target.value)}
                     />
                   </Autocomplete>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="Loading..."
+                    className="w-full pl-10 pr-4 py-2 border rounded-md"
+                    disabled
+                  />
                 )}
               </div>
             </div>
