@@ -247,7 +247,7 @@ const PartnerRequestView: React.FC<PartnerRequestViewProps> = ({ partnerId, onBa
               title="Vehicle Details"
               icon={<Truck className="text-blue-500" />}
               items={[
-                { label: "Vehicle Type", value: partner.vehicleDetails.name
+                { label: "Vehicle Type", value: partner.vehicleType
                 },
                 { label: "Registration Number", value: partner.registrationNumber }
               ]}

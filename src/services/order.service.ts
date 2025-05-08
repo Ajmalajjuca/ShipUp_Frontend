@@ -1,4 +1,4 @@
-import { orderApi } from './axios/instance';
+import { orderApi } from "./axios/instance";
 import {
   OrderSummary,
   TrackingResponse,
@@ -9,12 +9,12 @@ import {
   OrderReportResponse,
   RevenueReportResponse,
   Address,
-  PackageDetails
-} from '../types/order.types';
-import { vehicleService } from './vehicle.service';
-import { userApi } from './axios/instance';
-import { PaymentMethod } from '../components/user/Home/BookingComponents/PaymentMethodSelection';
-import axios from 'axios';
+  PackageDetails,
+} from "../types/order.types";
+import { vehicleService } from "./vehicle.service";
+import { userApi } from "./axios/instance";
+import { PaymentMethod } from "../components/user/Home/BookingComponents/PaymentMethodSelection";
+import axios from "axios";
 
 interface CreateOrderData {
   userId: string;
@@ -102,8 +102,8 @@ export interface OrderInput {
     longitude?: number;
   };
   vehicleId: string;
-  vehicleName: string | null; 
-  deliveryType: 'normal' | 'express';
+  vehicleName: string | null;
+  deliveryType: "normal" | "express";
   distance: number;
   price: number;
   basePrice?: number;
@@ -112,16 +112,22 @@ export interface OrderInput {
   gstAmount?: number;
   estimatedTime: string;
   paymentMethod: PaymentMethod;
-  paymentStatus?: 'pending' | 'paid' | 'not_required';
+  paymentStatus?: "pending" | "paid" | "not_required";
 }
 
 export interface Order extends OrderInput {
   orderId: string;
   userId: string;
-  status: 'pending' | 'accepted' | 'picked' | 'in_transit' | 'delivered' | 'cancelled';
+  status:
+    | "pending"
+    | "accepted"
+    | "picked"
+    | "in_transit"
+    | "delivered"
+    | "cancelled";
   createdAt: string;
   updatedAt: string;
-  paymentStatus: 'pending' | 'paid' | 'not_required';
+  paymentStatus: "pending" | "paid" | "not_required";
   driverId?: string;
   pickupAddress: {
     addressId: string;
@@ -166,14 +172,14 @@ export interface PricingConfig {
 // Default pricing configuration
 const DEFAULT_PRICING_CONFIG: PricingConfig = {
   deliveryMultipliers: {
-    normal: 1,   // 1x
-    express: 1.5 // 1.5x
+    normal: 1, // 1x
+    express: 1.5, // 1.5x
   },
   taxRates: {
-    gst: 0.18,       // 18% GST
-    commission: 0.10 // 10% commission
+    gst: 0.18, // 18% GST
+    commission: 0.1, // 10% commission
   },
-  minimumDistance: 2.5 // 2.5 km minimum distance
+  minimumDistance: 2.5, // 2.5 km minimum distance
 };
 
 // Cached pricing configuration
@@ -181,19 +187,19 @@ let currentPricingConfig: PricingConfig = { ...DEFAULT_PRICING_CONFIG };
 
 // Create a new axios instance for order-service
 const orderServiceApi = axios.create({
-  baseURL: import.meta.env.VITE_ORDER_SERVICE_URL || 'http://localhost:3004',
+  baseURL: import.meta.env.VITE_ORDER_SERVICE_URL || "http://localhost:3004",
   timeout: 10000,
   headers: {
-    'Content-Type': 'application/json',
-  }
+    "Content-Type": "application/json",
+  },
 });
 
 // Intercept requests to add auth token if available
 orderServiceApi.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
+      config.headers["Authorization"] = `Bearer ${token}`;
     }
     return config;
   },
@@ -212,93 +218,104 @@ export const orderService = {
       // if (response.data.success) {
       //   currentPricingConfig = response.data.pricingConfig;
       // }
-      
+
       // For now, return the cached config
       return currentPricingConfig;
     } catch (error) {
-      console.error('Failed to fetch pricing config:', error);
+      console.error("Failed to fetch pricing config:", error);
       // Fall back to default config if fetch fails
       return DEFAULT_PRICING_CONFIG;
     }
   },
-  
+
   // Admin method to update pricing (would be protected by auth in real app)
-  updatePricingConfig: async (newConfig: Partial<PricingConfig>): Promise<ApiResponse<{ pricingConfig: PricingConfig }>> => {
+  updatePricingConfig: async (
+    newConfig: Partial<PricingConfig>
+  ): Promise<ApiResponse<{ pricingConfig: PricingConfig }>> => {
     try {
       // In a real app, you would send this to the server
       // const response = await orderApi.put('/pricing/config', newConfig);
       // if (response.data.success) {
       //   currentPricingConfig = response.data.pricingConfig;
       // }
-      
+
       // For the demo, just update the local config
       currentPricingConfig = {
         ...currentPricingConfig,
         deliveryMultipliers: {
           ...currentPricingConfig.deliveryMultipliers,
-          ...newConfig.deliveryMultipliers
+          ...newConfig.deliveryMultipliers,
         },
         taxRates: {
           ...currentPricingConfig.taxRates,
-          ...newConfig.taxRates
-        }
+          ...newConfig.taxRates,
+        },
       };
-      
+
       return {
         success: true,
-        message: 'Pricing configuration updated successfully',
-        pricingConfig: currentPricingConfig
+        message: "Pricing configuration updated successfully",
+        pricingConfig: currentPricingConfig,
       };
     } catch (error) {
-      console.error('Failed to update pricing config:', error);
+      console.error("Failed to update pricing config:", error);
       return {
         success: false,
-        message: 'Failed to update pricing configuration',
-        error: String(error)
+        message: "Failed to update pricing configuration",
+        error: String(error),
       };
     }
   },
 
   // Calculate shipping cost based on vehicle pricing and distance
-  calculateShippingCost: async (distance: number, vehicleId: string, deliveryType: 'normal' | 'express'): Promise<number> => {
+  calculateShippingCost: async (
+    distance: number,
+    vehicleId: string,
+    deliveryType: "normal" | "express"
+  ): Promise<number> => {
     try {
       // Get the vehicle details
       const vehicleResponse = await vehicleService.getVehicleById(vehicleId);
       if (!vehicleResponse.success || !vehicleResponse.vehicle) {
-        throw new Error('Vehicle not found');
+        throw new Error("Vehicle not found");
       }
-      
+
       // Get the pricing config
       const pricingConfig = await orderService.getPricingConfig();
-      
+
       // Apply minimum distance if necessary
-      const calculatedDistance = Math.max(distance, pricingConfig.minimumDistance);
-      
+      const calculatedDistance = Math.max(
+        distance,
+        pricingConfig.minimumDistance
+      );
+
       // Calculate the base price using the vehicle's pricePerKm
-      const basePrice = calculatedDistance * (vehicleResponse.vehicle.pricePerKm || 0);
-      
+      const basePrice =
+        calculatedDistance * (vehicleResponse.vehicle.pricePerKm || 0);
+
       // Apply delivery type multiplier
       const typeMultiplier = pricingConfig.deliveryMultipliers[deliveryType];
       const deliveryPrice = basePrice * typeMultiplier;
-      
+
       // Apply commission and GST
       const commission = deliveryPrice * pricingConfig.taxRates.commission;
       const gstAmount = deliveryPrice * pricingConfig.taxRates.gst;
-      
+
       // Calculate total price
       const totalPrice = deliveryPrice + commission + gstAmount;
-      
+
       return Math.round(totalPrice * 100) / 100; // Round to 2 decimal places
     } catch (error) {
-      console.error('Error calculating shipping cost:', error);
+      console.error("Error calculating shipping cost:", error);
       return 0;
     }
   },
 
   // Order Management
-  createOrder: async (orderInput: OrderInput, userId: string): Promise<ApiResponse<Order>> => {
-    console.log('Creating order with input:', orderInput);
-    
+  createOrder: async (
+    orderInput: OrderInput,
+    userId: string
+  ): Promise<ApiResponse<Order>> => {
     try {
       // Prepare the order payload for the order-service
       const orderPayload = {
@@ -316,56 +333,63 @@ export const orderService = {
         distance: orderInput.distance,
         deliveryType: orderInput.deliveryType,
         paymentMethod: orderInput.paymentMethod,
+        paymentStatus: orderInput.paymentStatus,
       };
-      
+
       // Try to use the order-service backend
       try {
-        const response = await orderServiceApi.post('/orders', orderPayload);
-        console.log('Order service API response:', response.data);
-        
+        const response = await orderServiceApi.post("/orders", orderPayload);
+        console.log("Order service API response:", response.data);
+
         return {
           success: true,
           data: {
             orderId: response.data.id || response.data._id,
             ...orderInput,
             userId,
-            status: response.data.status || 'pending',
+            status: response.data.status || "pending",
             createdAt: response.data.createdAt || new Date().toISOString(),
             updatedAt: response.data.updatedAt || new Date().toISOString(),
-            paymentStatus: response.data.paymentStatus || 
-              (orderInput.paymentMethod === 'razorpay' || orderInput.paymentMethod === 'wallet'
-                ? 'pending' : 'not_required'),
+            paymentStatus:
+              response.data.paymentStatus ||
+              (orderInput.paymentMethod === "stripe" ||
+              orderInput.paymentMethod === "wallet"
+                ? "pending"
+                : "not_required"),
             pickupAddress: {
-              addressId: orderInput.pickupAddressId || 'pickup-' + Date.now(),
+              addressId: orderInput.pickupAddressId || "pickup-" + Date.now(),
               street: orderInput.pickupAddress.street,
               latitude: orderInput.pickupAddress.latitude,
               longitude: orderInput.pickupAddress.longitude,
             },
             dropoffAddress: {
-              addressId: orderInput.dropoffAddressId || 'dropoff-' + Date.now(),
+              addressId: orderInput.dropoffAddressId || "dropoff-" + Date.now(),
               street: orderInput.dropoffAddress.street,
               latitude: orderInput.dropoffAddress.latitude,
               longitude: orderInput.dropoffAddress.longitude,
             },
             vehicle: {
               id: orderInput.vehicleId,
-              name: response.data.vehicle?.name || 'Vehicle',
+              name: response.data.vehicle?.name || "Vehicle",
               pricePerKm: response.data.vehicle?.pricePerKm || 15,
               maxWeight: response.data.vehicle?.maxWeight || 100,
-              imageUrl: response.data.vehicle?.imageUrl || '/vehicles/bike.png',
+              imageUrl: response.data.vehicle?.imageUrl || "/vehicles/bike.png",
             },
-          }
+          },
         };
       } catch (apiError) {
-        console.warn('Order service API error, falling back to mock:', apiError);
-        
+        console.warn(
+          "Order service API error, falling back to mock:",
+          apiError
+        );
+
         // Fallback to mock data if the API fails
         // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
         // Generate a unique order ID
         const orderId = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-        
+
         // Create response data
         return {
           success: true,
@@ -373,45 +397,47 @@ export const orderService = {
             orderId,
             ...orderInput,
             userId,
-            status: 'pending',
+            status: "pending",
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-            paymentStatus: 
-              orderInput.paymentMethod === 'razorpay' || orderInput.paymentMethod === 'wallet'
-                ? 'pending' : 'not_required',
+            paymentStatus:
+              orderInput.paymentMethod === "stripe" ||
+              orderInput.paymentMethod === "wallet"
+                ? "pending"
+                : "not_required",
             pickupAddress: {
-              addressId: orderInput.pickupAddressId || 'pickup-' + Date.now(),
+              addressId: orderInput.pickupAddressId || "pickup-" + Date.now(),
               street: orderInput.pickupAddress.street,
-              type: 'home',
-              contactName: 'User',
-              contactPhone: '1234567890',
+              type: "home",
+              contactName: "User",
+              contactPhone: "1234567890",
               latitude: orderInput.pickupAddress.latitude,
               longitude: orderInput.pickupAddress.longitude,
             },
             dropoffAddress: {
-              addressId: orderInput.dropoffAddressId || 'dropoff-' + Date.now(),
+              addressId: orderInput.dropoffAddressId || "dropoff-" + Date.now(),
               street: orderInput.dropoffAddress.street,
-              type: 'work',
-              contactName: 'Recipient',
-              contactPhone: '9876543210',
+              type: "work",
+              contactName: "Recipient",
+              contactPhone: "9876543210",
               latitude: orderInput.dropoffAddress.latitude,
               longitude: orderInput.dropoffAddress.longitude,
             },
             vehicle: {
               id: orderInput.vehicleId,
-              name: 'Vehicle',
+              name: "Vehicle",
               pricePerKm: 15,
               maxWeight: 100,
-              imageUrl: '/vehicles/bike.png',
+              imageUrl: "/vehicles/bike.png",
             },
-          }
+          },
         };
       }
     } catch (error) {
-      console.error('Error creating order:', error);
+      console.error("Error creating order:", error);
       return {
         success: false,
-        message: 'Failed to create order',
+        message: "Failed to create order",
         error: error instanceof Error ? error.message : String(error),
       };
     }
@@ -423,11 +449,25 @@ export const orderService = {
       const response = await userApi.get(`/users/${userId}/orders`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error("Error fetching orders:", error);
       return {
         success: false,
-        message: 'Failed to fetch orders',
-        orders: []
+        message: "Failed to fetch orders",
+        orders: [],
+      };
+    }
+  },
+
+  getAllOrder: async () => {
+    try {
+      const response = await orderApi.get('/orders');
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      return {
+        success: false,
+        message: "Failed to fetch orders",
+        orders: [],
       };
     }
   },
@@ -437,196 +477,229 @@ export const orderService = {
       const response = await orderApi.get(`/orders/${orderId}`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching order:', error);
+      console.error("Error fetching order:", error);
       return {
         success: false,
-        message: 'Order not found'
+        message: "Order not found",
       };
     }
   },
 
   cancelOrder: async (orderId: string, reason: string) => {
     try {
-      const response = await orderApi.put(`/orders/${orderId}/cancel`, { reason });
+      const response = await orderApi.put(`/orders/${orderId}/cancel`, {
+        reason,
+      });
       return response.data;
     } catch (error) {
-      console.error('Error cancelling order:', error);
+      console.error("Error cancelling order:", error);
       return {
         success: false,
-        message: 'Failed to cancel order'
+        message: "Failed to cancel order",
       };
     }
   },
 
-  assignDriver: async (orderId: string, partnerId: string): Promise<ApiResponse<{ order: Order }>> => {
+  assignDriver: async (
+    orderId: string,
+    partnerId: string
+  ): Promise<ApiResponse<{ order: Order }>> => {
     try {
-      const response = await orderApi.post(`/orders/${orderId}/assign`, { partnerId });
+      const response = await orderApi.post(`/orders/${orderId}/assign`, {
+        partnerId,
+      });
       return response.data;
     } catch (error) {
-      console.error('Error assigning driver:', error);
+      console.error("Error assigning driver:", error);
       return {
         success: false,
-        message: 'Failed to assign driver'
+        message: "Failed to assign driver",
       };
     }
   },
 
   // Order Tracking
-  getTrackingDetails: async (orderId: string): Promise<ApiResponse<{ tracking: TrackingResponse }>> => {
+  getTrackingDetails: async (
+    orderId: string
+  ): Promise<ApiResponse<{ tracking: TrackingResponse }>> => {
     try {
       const response = await orderApi.get(`/orders/${orderId}/tracking`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching tracking details:', error);
+      console.error("Error fetching tracking details:", error);
       return {
         success: false,
-        message: 'Failed to get tracking details'
+        message: "Failed to get tracking details",
       };
     }
   },
 
-  updateDriverLocation: async (data: LocationUpdateData): Promise<ApiResponse<{}>> => {
+  updateDriverLocation: async (
+    data: LocationUpdateData
+  ): Promise<ApiResponse<{}>> => {
     try {
       const response = await orderApi.post(`/tracking/location`, data);
       return response.data;
     } catch (error) {
-      console.error('Error updating driver location:', error);
+      console.error("Error updating driver location:", error);
       return {
         success: false,
-        message: 'Failed to update location'
+        message: "Failed to update location",
       };
     }
   },
 
   // Pricing
-  calculatePrice: async (data: PricingRequestData): Promise<ApiResponse<{ pricing: PricingResponse }>> => {
+  calculatePrice: async (
+    data: PricingRequestData
+  ): Promise<ApiResponse<{ pricing: PricingResponse }>> => {
     try {
       // If no vehicleId is provided, use default pricing
       if (!data.vehicleId) {
         const response = await orderApi.post(`/pricing/calculate`, data);
         return response.data;
       }
-      
+
       // If vehicleId is provided, calculate custom pricing
       const response = await orderApi.post(`/pricing/calculate`, data);
-      
+
       // Get distance from the API response
       const distance = response.data.pricing?.distance || 0;
       if (distance > 0) {
         // Calculate price based on the vehicle
         const price = await orderService.calculateShippingCost(
-          distance, 
-          data.vehicleId, 
-          data.deliveryType as 'normal' | 'express'
+          distance,
+          data.vehicleId,
+          data.deliveryType as "normal" | "express"
         );
-        
+
         // Create a custom pricing response
         return {
           success: true,
           pricing: {
             ...response.data.pricing,
             price,
-            vehicleId: data.vehicleId
-          }
+            vehicleId: data.vehicleId,
+          },
         };
       }
-      
+
       return response.data;
     } catch (error) {
-      console.error('Error calculating price:', error);
+      console.error("Error calculating price:", error);
       return {
         success: false,
-        message: 'Failed to calculate price'
+        message: "Failed to calculate price",
       };
     }
   },
 
-  getPriceTiers: async (): Promise<ApiResponse<{ pricingTiers: PricingTiers }>> => {
+  getPriceTiers: async (): Promise<
+    ApiResponse<{ pricingTiers: PricingTiers }>
+  > => {
     try {
       // Get all available vehicles and their pricing
       const vehiclesResponse = await vehicleService.getVehicles();
       if (!vehiclesResponse.success) {
-        throw new Error('Failed to fetch vehicle pricing tiers');
+        throw new Error("Failed to fetch vehicle pricing tiers");
       }
-      
+
       // Map vehicles to pricing tiers
-      const vehicleTiers = vehiclesResponse.vehicles.map(vehicle => ({
+      const vehicleTiers = vehiclesResponse.vehicles.map((vehicle) => ({
         id: vehicle.id,
         name: vehicle.name,
         pricePerKm: vehicle.pricePerKm,
         maxWeight: vehicle.maxWeight,
-        imageUrl: vehicle.imageUrl
+        imageUrl: vehicle.imageUrl,
       }));
-      
+
       return {
         success: true,
         pricingTiers: {
           vehicles: vehicleTiers,
           deliveryTypes: [
-            { id: 'normal', name: 'Standard', multiplier: currentPricingConfig.deliveryMultipliers.normal },
-            { id: 'express', name: 'Express', multiplier: currentPricingConfig.deliveryMultipliers.express }
-          ]
-        }
+            {
+              id: "normal",
+              name: "Standard",
+              multiplier: currentPricingConfig.deliveryMultipliers.normal,
+            },
+            {
+              id: "express",
+              name: "Express",
+              multiplier: currentPricingConfig.deliveryMultipliers.express,
+            },
+          ],
+        },
       };
     } catch (error) {
-      console.error('Error fetching price tiers:', error);
+      console.error("Error fetching price tiers:", error);
       return {
         success: false,
-        message: 'Failed to fetch pricing tiers'
+        message: "Failed to fetch pricing tiers",
       };
     }
   },
 
   // Payment
-  processPayment: async (orderId: string, paymentMethod: PaymentMethod, amount: number): Promise<ApiResponse<any>> => {
+  processPayment: async (
+    orderId: string,
+    paymentMethod: PaymentMethod,
+    amount: number
+  ): Promise<ApiResponse<any>> => {
     try {
       // Prepare payment data
       const paymentData = {
         orderId,
         method: paymentMethod,
         amount,
-        status: 'paid',
-        transactionId: `txn_${Date.now()}`
+        status: "paid",
+        transactionId: `txn_${Date.now()}`,
       };
 
       // Try to use the order-service backend
       try {
-        const response = await orderServiceApi.post('/orders/payment', paymentData);
+        const response = await orderServiceApi.post(
+          "/orders/payment",
+          paymentData
+        );
         return {
           success: true,
-          data: response.data
+          data: response.data,
         };
       } catch (apiError) {
-        console.warn('Order service API error, falling back to mock:', apiError);
-        
+        console.warn(
+          "Order service API error, falling back to mock:",
+          apiError
+        );
+
         // Fallback to mock implementation
         // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        let paymentStatus: 'pending' | 'paid' | 'failed';
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+
+        let paymentStatus: "pending" | "paid" | "failed";
         let transactionId: string | undefined;
-        
+
         // Different handling based on payment method
         switch (paymentMethod) {
-          case 'razorpay':
-            paymentStatus = 'paid';
+          case "stripe":
+            paymentStatus = "paid";
             transactionId = `rzp_${Date.now()}`;
             break;
-            
-          case 'wallet':
-            paymentStatus = 'paid';
+
+          case "wallet":
+            paymentStatus = "paid";
             transactionId = `wlt_${Date.now()}`;
             break;
-            
-          case 'cash':
-          case 'upi':
-            paymentStatus = 'pending';
+
+          case "cash":
+          case "upi":
+            paymentStatus = "pending";
             break;
-            
+
           default:
-            throw new Error('Invalid payment method');
+            throw new Error("Invalid payment method");
         }
-        
+
         return {
           success: true,
           data: {
@@ -635,59 +708,67 @@ export const orderService = {
             transactionId,
             amount,
             timestamp: new Date().toISOString(),
-          }
+          },
         };
       }
     } catch (error) {
-      console.error('Error processing payment:', error);
+      console.error("Error processing payment:", error);
       return {
         success: false,
-        message: 'Failed to process payment',
+        message: "Failed to process payment",
         error: error instanceof Error ? error.message : String(error),
       };
     }
   },
 
-  getPaymentStatus: async (orderId: string): Promise<ApiResponse<{ payment: PaymentResponse }>> => {
+  getPaymentStatus: async (
+    orderId: string
+  ): Promise<ApiResponse<{ payment: PaymentResponse }>> => {
     try {
       const response = await orderApi.get(`/payments/order/${orderId}`);
       return response.data;
     } catch (error) {
-      console.error('Error checking payment status:', error);
+      console.error("Error checking payment status:", error);
       return {
         success: false,
-        message: 'Failed to get payment status'
+        message: "Failed to get payment status",
       };
     }
   },
 
-  processRefund: async (data: RefundData): Promise<ApiResponse<{ refund: RefundResponse }>> => {
+  processRefund: async (
+    data: RefundData
+  ): Promise<ApiResponse<{ refund: RefundResponse }>> => {
     try {
       const response = await orderApi.post(`/payments/refund`, data);
       return response.data;
     } catch (error) {
-      console.error('Error processing refund:', error);
+      console.error("Error processing refund:", error);
       return {
         success: false,
-        message: 'Failed to process refund'
+        message: "Failed to process refund",
       };
     }
   },
 
   // Process payment for post-delivery methods
-  processPostDeliveryPayment: async (orderId: string, method: PaymentMethod, amount: number): Promise<ApiResponse<{ payment: PaymentResponse }>> => {
+  processPostDeliveryPayment: async (
+    orderId: string,
+    method: PaymentMethod,
+    amount: number
+  ): Promise<ApiResponse<{ payment: PaymentResponse }>> => {
     try {
       const response = await orderApi.post(`/payments/post-delivery`, {
         orderId,
         method,
-        amount
+        amount,
       });
       return response.data;
     } catch (error) {
-      console.error('Error processing post-delivery payment:', error);
+      console.error("Error processing post-delivery payment:", error);
       return {
         success: false,
-        message: 'Failed to process payment'
+        message: "Failed to process payment",
       };
     }
   },
@@ -718,8 +799,8 @@ export const orderService = {
       const response = await orderApi.get(`/orders/${orderId}/status`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching order status:', error);
+      console.error("Error fetching order status:", error);
       throw error;
     }
-  }
-}; 
+  },
+};

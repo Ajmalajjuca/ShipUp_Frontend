@@ -16,12 +16,14 @@ interface ProfileCardProps {
   onLogout?: () => void;
   isEditing?: boolean;
   children?: React.ReactNode;
+  setActiveSection: (section: string) => void;
 }
 
 const ProfileCard: React.FC<ProfileCardProps> = ({ 
   userData, 
   showControls = true, 
   onLogout,
+  setActiveSection,
   isEditing = false,
   children 
 }) => {
@@ -80,7 +82,7 @@ const ProfileCard: React.FC<ProfileCardProps> = ({
           <div className="mt-6">
             {/* Balance & Loyalty Point Cards */}
             <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-xl p-4 text-white shadow-md hover:shadow-lg transition-all duration-300 relative overflow-hidden">
+              <div onClick={()=>setActiveSection('wallet')} className="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-xl p-4 text-white shadow-md hover:shadow-lg transition-all duration-300 relative cursor-pointer overflow-hidden">
                 <div className="absolute -right-4 -bottom-4 opacity-10">
                   <CreditCard size={64} />
                 </div>
@@ -89,7 +91,7 @@ const ProfileCard: React.FC<ProfileCardProps> = ({
                   <span className="text-sm font-medium">Wallet</span>
                 </div>
                 <div className="text-lg font-bold">
-                  ${userData.walletBalance?.toFixed(2) || '0.00'}
+                  ₹{userData.walletBalance?.toFixed(2) || '0.00'}
                 </div>
               </div>
               

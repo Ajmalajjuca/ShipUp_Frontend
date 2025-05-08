@@ -81,7 +81,6 @@ const ActiveOrders: React.FC = () => {
                     await axios.patch(`http://localhost:3004/api/orders/${activeOrder.orderId}`, {
                         status: activeOrder.status
                     });
-                    console.log(`Order status updated in DB===>: ${activeOrder.status}`);
                 } catch (error) {
                     console.error('Error updating order status in DB:', error);
                     toast.error('Failed to update order status. Please contact support.');
@@ -458,6 +457,7 @@ const ActiveOrders: React.FC = () => {
             <div className="p-4 md:p-6 max-w-6xl mx-auto font-sans">
                 <PartnerRating
                     orderId={activeOrder.orderId}
+                    userId={user?.userId}
                     driverId={activeOrder.driverId}
                     driverName={driverData?.fullName}
                     driverPhoto={driverData?.profilePicturePath}

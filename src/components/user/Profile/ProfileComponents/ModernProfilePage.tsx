@@ -10,13 +10,7 @@ const ModernProfilePage: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   
   
-  // Sample user data (use actual data from Redux in production)
-  const userData = user || {
-    fullName: "John Doe",
-    email: "John.Doe@Gmail.Com",
-    phone: "9887654321",
-    referralId: "RF87534"
-  };
+
   
   // Menu items expanded for a shipping profile
   const menuItems = [

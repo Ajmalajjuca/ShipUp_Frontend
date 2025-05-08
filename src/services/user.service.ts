@@ -1,4 +1,4 @@
-import { userApi } from './axios/instance';
+import { orderApi, userApi } from './axios/instance';
 
 interface UpdateProfileData {
   fullName?: string;
@@ -119,6 +119,11 @@ export const userService = {
 
   updateAddress: async (addressId: string, addressData: any) => {
     const response = await userApi.put(`/addresses/${addressId}`, addressData);
+    return response.data;
+  },
+
+  getOrdersByUserId: async (userId: string) => {
+    const response = await orderApi.get(`/orders/user/${userId}`);
     return response.data;
   },
 }; 

@@ -11,11 +11,14 @@ import { DialogProvider } from './utils/confirmDialog';
 import { GoogleMapsProvider } from './contexts/GoogleMapsProvider';
 
 import AppRoutes from './routes/AppRoutes';
+import { Elements } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
 
 function App() {
   const dispatch = useDispatch<AppDispatch>();
   const [isSessionRestored, setIsSessionRestored] = useState(false);
   const navigate = useNavigate();
+  const stripePromise = loadStripe('pk_test_51RLduuQ6G2nx1510KNlbxScOpOASA81ywCSBMFJddFr2AjmgLy2g5HqPlGnVPDXQd8bOwwlAGr0R62wbariePe4x00plYo5Add');
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -75,11 +78,12 @@ function App() {
   return (
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ''}>
       <GoogleMapsProvider>
-
+      <Elements stripe={stripePromise}>
       <DialogProvider>
         <Toaster position="top-right" />
         <AppRoutes />
       </DialogProvider>
+      </Elements>
       </GoogleMapsProvider>
     </GoogleOAuthProvider>
   );

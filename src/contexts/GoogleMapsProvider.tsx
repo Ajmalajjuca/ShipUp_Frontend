@@ -11,7 +11,8 @@ import React, { createContext, useContext } from 'react';
    export const GoogleMapsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
      const { isLoaded } = useJsApiLoader({
        id: 'google-map-script',
-       googleMapsApiKey: 'AIzaSyAr9iKL412E6QE40v2xpCgroD99-JBzFNU',
+       version: 'weekly',
+       googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
        libraries,
        language: 'en',
        region: 'US',

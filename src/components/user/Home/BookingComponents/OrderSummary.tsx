@@ -279,8 +279,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ orderDetails, onSubmit, isL
   // Get payment method display name
   const getPaymentMethodName = (method: PaymentMethod | null): string => {
     switch (method) {
-      case 'razorpay':
-        return 'Credit/Debit Card (Razorpay)';
+      case 'stripe':
+        return 'Credit/Debit Card (stripe)';
       case 'wallet':
         return 'ShipUp Wallet';
       case 'cash':
@@ -294,7 +294,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({ orderDetails, onSubmit, isL
 
   // Determine if payment method is pre-payment or post-delivery
   const isPrePaymentMethod = (method: PaymentMethod | null): boolean => {
-    return method === 'razorpay' || method === 'wallet';
+    return method === 'stripe' || method === 'wallet';
   };
   
   return (

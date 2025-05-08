@@ -1,7 +1,7 @@
 import { PaymentMethod } from '../components/user/Home/BookingComponents/PaymentMethodSelection';
 
 // Mock function to integrate with Razorpay in the future
-export const initializeRazorpay = (
+export const initializeStripe = (
   orderId: string,
   amount: number,
   currency: string = 'INR',
@@ -17,7 +17,7 @@ export const initializeRazorpay = (
 ) => {
   // This is a mock implementation
   // In a real app, you would load the Razorpay SDK and open the payment modal
-  console.log('Initializing Razorpay for order:', orderId, 'Amount:', amount);
+  console.log('Initializing stripe for order:', orderId, 'Amount:', amount);
   
   // Simulate a successful payment after a delay
   setTimeout(() => {
@@ -62,8 +62,8 @@ export const processPayment = async (
   onError: (error: any) => void
 ) => {
   switch (paymentMethod) {
-    case 'razorpay':
-      initializeRazorpay(
+    case 'stripe':
+      initializeStripe(
         orderId,
         amount * 100, // Razorpay expects amount in paise
         'INR',

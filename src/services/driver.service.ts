@@ -1,4 +1,4 @@
-import { driverApi, partnerApi } from './axios/instance';
+import { driverApi, orderApi, partnerApi } from './axios/instance';
 import axios from 'axios';
 import { sessionManager } from '../utils/sessionManager';
 
@@ -61,18 +61,13 @@ export const driverService = {
   },
 
   getPartnerOrders: async (partnerId: string) => {
+    
     try {
-      const response = await driverApi.get(`/api/drivers/${partnerId}/orders`);
+      const response = await orderApi.get(`/orders/drivers/${partnerId}`);
+      
       return response.data;
     } catch (error) {
       console.error('Error fetching partner orders:', error);
-      // Return mock data for demo purposes
-      return {
-        success: true,
-        orders: [
-          
-        ]
-      };
     }
   },
 

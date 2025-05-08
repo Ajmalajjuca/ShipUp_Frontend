@@ -16,21 +16,13 @@ import NavBar from '../NavBar';
 import Footer from '../Footer';
 import axios from 'axios';
 import io from 'socket.io-client';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
 
-// Interfaces
+
 interface OrderDetails {
-  pickupAddress: {
-    addressId: string;
-    street: string;
-    latitude?: number;
-    longitude?: number;
-  } | null;
-  dropoffAddress: {
-    addressId: string;
-    street: string;
-    latitude?: number;
-    longitude?: number;
-  } | null;
+  pickupAddress: { addressId: string; street: string; latitude?: number; longitude?: number } | null;
+  dropoffAddress: { addressId: string; street: string; latitude?: number; longitude?: number } | null;
   vehicleId: string | null;
   vehicleName: string | null;
   vehiclePricePerKm: number | null;
@@ -51,10 +43,7 @@ interface DriverTracking {
   driverName: string;
   profileImage?: string;
   vehicle: string;
-  location: {
-    latitude: number;
-    longitude: number;
-  };
+  location: { latitude: number; longitude: number };
   estimatedArrival: string;
   distance: number;
   phone?: string;
@@ -75,7 +64,7 @@ interface DriverResponseData {
 }
 
 interface OrderStatusUpdateData {
-  orderId: string;
+  orderElementId: string;
   status: string;
   partnerId?: string;
   timestamp: number;
@@ -83,29 +72,28 @@ interface OrderStatusUpdateData {
 
 const OrderBooking: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useSelector((state: RootState) => state.auth);  
+  const { user } = useSelector((state: RootState) => state.auth);
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [pricingConfig, setPricingConfig] = useState<PricingConfig | null>(null);
-  const [vehicles, setVehicles] = useState<Array<{id: string; name: string; pricePerKm: number; maxWeight: number; imageUrl?: string}>>([]);
+  const [vehicles, setVehicles] = useState<Array<{ id: string; name: string; pricePerKm: number; maxWeight: number; imageUrl?: string }>>([]);
   const [orderStatus, setOrderStatus] = useState<'created' | 'finding_driver' | 'driver_assigned' | 'driver_arrived' | 'picked_up' | 'completed' | null>(null);
   const [driverTracking, setDriverTracking] = useState<DriverTracking | null>(null);
   const driverLocationInterval = useRef<NodeJS.Timeout | null>(null);
-  const [orderId, setOrderId] = useState<string | null>(null); // Store orderId after creation
+  const [orderId, setOrderId] = useState<string | null>(null);
   const socketRef = useRef<any>(null);
+  const stripe = useStripe();
+  const elements = useElements();
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [cardComplete, setCardComplete] = useState(false);
 
-
-console.log('status===>:', orderStatus);
-
-  
-  // Order details state
   const [otpStatus, setOtpStatus] = useState<OtpStatus>({
     pickupOtp: null,
     dropoffOtp: null,
     pickupVerified: false,
-    dropoffVerified: false
+    dropoffVerified: false,
   });
-  
+
   const [orderDetails, setOrderDetails] = useState<OrderDetails>({
     pickupAddress: null,
     dropoffAddress: null,
@@ -121,24 +109,23 @@ console.log('status===>:', orderStatus);
     commission: 0,
     gstAmount: 0,
     estimatedTime: '',
-    effectiveDistance: 0
+    effectiveDistance: 0,
   });
-  
-  // Load pricing configuration and vehicles on component mount
+
   useEffect(() => {
     const loadData = async () => {
       try {
         const config = await orderService.getPricingConfig();
         setPricingConfig(config);
-        
+
         const vehicleResponse = await vehicleService.getVehicles();
         if (vehicleResponse.success && vehicleResponse.vehicles) {
-          const vehicleData = vehicleResponse.vehicles.map(vehicle => ({
+          const vehicleData = vehicleResponse.vehicles.map((vehicle) => ({
             id: vehicle.id,
             name: vehicle.name,
-            pricePerKm: vehicle.pricePerKm || 0, 
-            maxWeight: typeof vehicle.maxWeight === 'string' ? parseFloat(vehicle.maxWeight) : (vehicle.maxWeight || 0),
-            imageUrl: vehicle.imageUrl
+            pricePerKm: vehicle.pricePerKm || 0,
+            maxWeight: typeof vehicle.maxWeight === 'string' ? parseFloat(vehicle.maxWeight) : vehicle.maxWeight || 0,
+            imageUrl: vehicle.imageUrl,
           }));
           setVehicles(vehicleData);
         } else {
@@ -149,37 +136,39 @@ console.log('status===>:', orderStatus);
         toast.error('Could not load necessary information');
       }
     };
-    
+
     loadData();
   }, []);
-  
-  // Calculate distance when addresses are selected
+
   useEffect(() => {
-    if (orderDetails.pickupAddress && orderDetails.dropoffAddress &&
-        orderDetails.pickupAddress.latitude && orderDetails.pickupAddress.longitude &&
-        orderDetails.dropoffAddress.latitude && orderDetails.dropoffAddress.longitude) {
-      
+    if (
+      orderDetails.pickupAddress &&
+      orderDetails.dropoffAddress &&
+      orderDetails.pickupAddress.latitude &&
+      orderDetails.pickupAddress.longitude &&
+      orderDetails.dropoffAddress.latitude &&
+      orderDetails.dropoffAddress.longitude
+    ) {
       const distance = calculateDistance(
         orderDetails.pickupAddress.latitude,
         orderDetails.pickupAddress.longitude,
         orderDetails.dropoffAddress.latitude,
         orderDetails.dropoffAddress.longitude
       );
-      
-      setOrderDetails(prev => ({
+
+      setOrderDetails((prev) => ({
         ...prev,
-        distance: parseFloat(distance.toFixed(2))
+        distance: parseFloat(distance.toFixed(2)),
       }));
     }
   }, [orderDetails.pickupAddress, orderDetails.dropoffAddress]);
-  
-  // Calculate price when dependencies change
+
   useEffect(() => {
     if (
-      orderDetails.distance > 0 && 
-      orderDetails.vehicleId && 
+      orderDetails.distance > 0 &&
+      orderDetails.vehicleId &&
       orderDetails.vehiclePricePerKm &&
-      orderDetails.deliveryType && 
+      orderDetails.deliveryType &&
       pricingConfig
     ) {
       const vehicleRate = orderDetails.vehiclePricePerKm;
@@ -187,17 +176,17 @@ console.log('status===>:', orderStatus);
       const gstRate = pricingConfig.taxRates.gst;
       const commissionRate = pricingConfig.taxRates.commission;
       const minimumDistance = pricingConfig.minimumDistance;
-      
+
       const effectiveDistance = Math.max(orderDetails.distance, minimumDistance);
       const basePrice = effectiveDistance * vehicleRate;
       const deliveryPrice = basePrice * deliveryMultiplier;
       const commission = deliveryPrice * commissionRate;
       const gstAmount = (deliveryPrice + commission) * gstRate;
       const finalPrice = deliveryPrice + commission + gstAmount;
-      
+
       let speedKmPerHour = 30;
       const vehicleName = orderDetails.vehicleName?.toLowerCase() || '';
-      
+
       if (vehicleName.includes('bike') || vehicleName.includes('cycle')) {
         speedKmPerHour = 25;
       } else if (vehicleName.includes('van')) {
@@ -205,17 +194,16 @@ console.log('status===>:', orderStatus);
       } else if (vehicleName.includes('truck')) {
         speedKmPerHour = 30;
       }
-      
+
       const timeMultiplier = orderDetails.deliveryType === 'express' ? 0.8 : 1;
       const timeInHours = (effectiveDistance / speedKmPerHour) * timeMultiplier;
       const hours = Math.floor(timeInHours);
       const minutes = Math.round((timeInHours - hours) * 60);
-      
-      const estimatedTime = hours > 0 
-        ? `${hours} hr${hours > 1 ? 's' : ''} ${minutes} min` 
-        : `${minutes} min`;
-      
-      setOrderDetails(prev => ({
+
+      const estimatedTime =
+        hours > 0 ? `${hours} hr${hours > 1 ? 's' : ''} ${minutes} min` : `${minutes} min`;
+
+      setOrderDetails((prev) => ({
         ...prev,
         price: parseFloat(finalPrice.toFixed(2)),
         basePrice: parseFloat(basePrice.toFixed(2)),
@@ -223,77 +211,53 @@ console.log('status===>:', orderStatus);
         commission: parseFloat(commission.toFixed(2)),
         gstAmount: parseFloat(gstAmount.toFixed(2)),
         effectiveDistance,
-        estimatedTime
+        estimatedTime,
       }));
     }
   }, [orderDetails.distance, orderDetails.vehicleId, orderDetails.vehiclePricePerKm, orderDetails.deliveryType, pricingConfig]);
-  
-  // Update order status in database whenever orderStatus changes
-  // useEffect(() => {
-  //   if (orderStatus && orderId) {
-  //     const updateOrderStatusInDB = async () => {
-  //       try {
-  //         await axios.patch(`http://localhost:3004/api/orders/${orderId}`, {
-  //           status: orderStatus
-  //         });
-  //         console.log(`Order status updated in DB===>: ${orderStatus}`);
-  //       } catch (error) {
-  //         console.error('Error updating order status in DB:', error);
-  //         toast.error('Failed to update order status. Please contact support.');
-  //       }
-  //     };
-  //     updateOrderStatusInDB();
-  //   }
-  // }, [orderStatus, orderId]);
-  
-  // Calculate distance using Haversine formula
+
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
     const R = 6371;
     const dLat = deg2rad(lat2 - lat1);
     const dLon = deg2rad(lon2 - lon1);
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = R * c;
     return distance;
   };
-  
+
   const deg2rad = (deg: number): number => {
-    return deg * (Math.PI/180);
+    return deg * (Math.PI / 180);
   };
-  
-  // Update order details
+
   const updateOrderDetails = (key: keyof OrderDetails, value: any) => {
-    setOrderDetails(prev => ({
+    setOrderDetails((prev) => ({
       ...prev,
-      [key]: value
+      [key]: value,
     }));
   };
-  
-  // Handle vehicle selection
+
   const handleVehicleSelect = (vehicleId: string) => {
-    const selectedVehicle = vehicles.find(v => v.id === vehicleId);
+    const selectedVehicle = vehicles.find((v) => v.id === vehicleId);
     if (selectedVehicle) {
-      setOrderDetails(prev => ({
+      setOrderDetails((prev) => ({
         ...prev,
         vehicleId: selectedVehicle.id,
         vehicleName: selectedVehicle.name,
-        vehiclePricePerKm: selectedVehicle.pricePerKm
+        vehiclePricePerKm: selectedVehicle.pricePerKm,
       }));
     }
   };
-  
-  // Handle payment method selection
+
   const handlePaymentMethodSelect = (method: PaymentMethod) => {
-    setOrderDetails(prev => ({
+    setOrderDetails((prev) => ({
       ...prev,
-      paymentMethod: method
+      paymentMethod: method,
     }));
   };
-  
-  // Handle next step
+
   const handleNextStep = () => {
     if (currentStep === 1) {
       if (!orderDetails.pickupAddress || !orderDetails.dropoffAddress) {
@@ -316,104 +280,105 @@ console.log('status===>:', orderStatus);
         return;
       }
     }
-    
-    setCurrentStep(prev => prev + 1);
+
+    setCurrentStep((prev) => prev + 1);
   };
-  
-  // Handle previous step
+
   const handlePreviousStep = () => {
-    setCurrentStep(prev => Math.max(1, prev - 1));
+    setCurrentStep((prev) => Math.max(1, prev - 1));
   };
-  
-  // Generate OTP
+
   const generateOtp = (): string => {
     return Math.floor(1000 + Math.random() * 9000).toString();
   };
 
-  // Handle driver arrival at pickup location
   const handleDriverArrived = (orderId: string) => {
     const pickupOtp = generateOtp();
-    
-    setOtpStatus(prev => ({
+
+    setOtpStatus((prev) => ({
       ...prev,
-      pickupOtp: pickupOtp
+      pickupOtp: pickupOtp,
     }));
-    
+
     setOrderStatus('driver_arrived');
-    
-    axios.post(`http://localhost:3003/api/orders/${orderId}/otp`, {
-      type: 'pickup',
-      otp: pickupOtp
-    }).catch(error => {
-      console.error('Error saving pickup OTP:', error);
-    });
-    
+
+    axios
+      .post(`http://localhost:3003/api/orders/${orderId}/otp`, {
+        type: 'pickup',
+        otp: pickupOtp,
+      })
+      .catch((error) => {
+        console.error('Error saving pickup OTP:', error);
+      });
+
     toast.success('Driver has arrived at pickup location!');
   };
-  
-  // Handle pickup verification
+
   const handlePickupVerified = (orderId: string) => {
-    setOtpStatus(prev => ({
+    setOtpStatus((prev) => ({
       ...prev,
-      pickupVerified: true
+      pickupVerified: true,
     }));
-    
+
     setOrderStatus('picked_up');
-    
+
     const dropoffOtp = generateOtp();
-    setOtpStatus(prev => ({
+    setOtpStatus((prev) => ({
       ...prev,
-      dropoffOtp: dropoffOtp
+      dropoffOtp: dropoffOtp,
     }));
-    
-    axios.post(`http://localhost:3003/api/orders/${orderId}/otp`, {
-      type: 'dropoff',
-      otp: dropoffOtp
-    }).catch(error => {
-      console.error('Error saving dropoff OTP:', error);
-    });
-    
+
+    axios
+      .post(`http://localhost:3003/api/orders/${orderId}/otp`, {
+        type: 'dropoff',
+        otp: dropoffOtp,
+      })
+      .catch((error) => {
+        console.error('Error saving dropoff OTP:', error);
+      });
+
     if (user?.userId) {
-      activeOrderService.getActiveOrder(user.userId)
-        .then(activeOrder => {
+      activeOrderService
+        .getActiveOrder(user.userId)
+        .then((activeOrder) => {
           if (activeOrder) {
             const updatedOrder: ActiveOrder = {
               ...activeOrder,
               status: 'picked_up',
-              dropoffOtp: dropoffOtp
+              dropoffOtp: dropoffOtp,
             };
-            
+
             return activeOrderService.storeActiveOrder(user.userId, updatedOrder);
           }
           return false;
         })
-        .catch(error => {
+        .catch((error) => {
           console.error('Error updating active order after pickup:', error);
         });
     }
-    
+
     toast.success('Package has been picked up!');
   };
-  
-  // Handle delivery completion
+
   const handleDeliveryCompleted = (orderId: string) => {
-    setOtpStatus(prev => ({
+    setOtpStatus((prev) => ({
       ...prev,
-      dropoffVerified: true
+      dropoffVerified: true,
     }));
-    
+
     setOrderStatus('completed');
     console.log('Order status set to completed');
-    
+
     if (user?.userId) {
-      activeOrderService.getActiveOrder(user.userId)
-        .then(activeOrder => {
+      activeOrderService
+        .getActiveOrder(user.userId)
+        .then((activeOrder) => {
           if (activeOrder) {
             const updatedOrder: ActiveOrder = {
               ...activeOrder,
-              status: 'completed'
+              status: 'completed',
             };
-            
+
             return activeOrderService.storeActiveOrder(user.userId, updatedOrder, 3600);
           }
           return false;
@@ -421,41 +386,107 @@ console.log('status===>:', orderStatus);
         .then(() => {
           return activeOrderService.removeActiveOrder(user.userId);
         })
-        .catch(error => {
+        .catch((error) => {
           console.error('Error handling active order after completion:', error);
         });
     }
-    
+
     toast.success('Delivery has been completed!');
     setOrderStatus('completed');
     navigate('/orders');
   };
-  
-  // Submit order function
+
+  const handleStripePayment = async (orderId: string, clientSecret: string) => {
+    console.log('Handling Stripe payment for order:', orderId, {
+      clientSecret,
+      currentStep,
+      cardComplete,
+      elements: !!elements,
+      stripe: !!stripe,
+    });
+
+    if (!stripe || !elements || !clientSecret) {
+      console.error('Payment system initialization failed:', { stripe: !!stripe, elements: !!elements, clientSecret });
+      toast.error('Payment system not initialized. Please try again.');
+      return false;
+    }
+
+    const cardElement = elements.getElement(CardElement);
+    if (!cardElement) {
+      console.error('CardElement not found in DOM');
+      toast.error('Please enter your card details.');
+      return false;
+    }
+
+    if (!cardComplete) {
+      toast.error('Please complete the card details.');
+      return false;
+    }
+
+    try {
+      const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card: cardElement,
+          billing_details: {
+            name: user?.fullName || 'Customer',
+          },
+        },
+      });
+
+      if (error) {
+        console.error('Stripe payment error:', error);
+        toast.error(error.message || 'Payment failed. Please try another card.');
+        return false;
+      }
+
+      if (paymentIntent.status === 'succeeded') {
+        toast.success('Payment successful!');
+        return true;
+      } else {
+        toast.error('Payment not completed. Please try again.');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error processing Stripe payment:', error);
+      toast.error('Payment processing failed. Please try again.');
+      return false;
+    }
+  };
+
   const submitOrder = async () => {
-    console.log('Submitting order with details:', orderDetails);
-    
-    if (!orderDetails.pickupAddress || !orderDetails.dropoffAddress || 
-        !orderDetails.vehicleId|| !orderDetails.deliveryType ||
-        !orderDetails.paymentMethod || !user?.userId) {
+    console.log('Submitting order with details:', orderDetails, { currentStep, cardComplete });
+
+    if (
+      !orderDetails.pickupAddress ||
+      !orderDetails.dropoffAddress ||
+      !orderDetails.vehicleId ||
+      !orderDetails.deliveryType ||
+      !orderDetails.paymentMethod ||
+      !user?.userId
+    ) {
       toast.error('Please complete all required fields');
       return;
     }
-    
+
+    if (orderDetails.paymentMethod === 'stripe' && !cardComplete) {
+      toast.error('Please complete your card details');
+      return;
+    }
+
     setIsLoading(true);
     setOrderStatus('created');
-    
+
     try {
       const orderInput: OrderInput = {
         pickupAddress: {
           street: orderDetails.pickupAddress.street,
           latitude: orderDetails.pickupAddress.latitude,
-          longitude: orderDetails.pickupAddress.longitude
+          longitude: orderDetails.pickupAddress.longitude,
         },
         dropoffAddress: {
           street: orderDetails.dropoffAddress.street,
           latitude: orderDetails.dropoffAddress.latitude,
-          longitude: orderDetails.dropoffAddress.longitude
+          longitude: orderDetails.dropoffAddress.longitude,
         },
         pickupAddressId: orderDetails.pickupAddress.addressId,
         dropoffAddressId: orderDetails.dropoffAddress.addressId,
@@ -470,129 +501,177 @@ console.log('status===>:', orderStatus);
         gstAmount: orderDetails.gstAmount,
         estimatedTime: orderDetails.estimatedTime,
         paymentMethod: orderDetails.paymentMethod,
-        paymentStatus: isPrePaymentMethod(orderDetails.paymentMethod) ? 'pending' : 'not_required'
+        paymentStatus: isPrePaymentMethod(orderDetails.paymentMethod) ? 'pending' : 'not_required',
       };
-      
+
       const response = await orderService.createOrder(orderInput, user.userId);
       console.log('Order creation response:', response);
-      
+
       if (response.success) {
-        setOrderId(response.data.orderId); // Store orderId
+        setOrderId(response.data.orderId);
         toast.success('Order placed successfully!');
-        
+
         if (isPrePaymentMethod(orderDetails.paymentMethod)) {
-          if (orderDetails.paymentMethod === 'razorpay') {
-            toast.success('Redirecting to payment gateway...');
+          if (orderDetails.paymentMethod === 'stripe') {
+            try {
+              const paymentResponse = await axios.post(
+                'http://localhost:3004/api/stripe/create-payment-intent',
+                {
+                  orderId: response.data.orderId,
+                  amount: Math.round(orderDetails.price * 100),
+                  currency: 'inr',
+                }
+              );
+              console.log('Payment response:', paymentResponse.data);
+
+              if (paymentResponse.data.clientSecret) {
+                setClientSecret(paymentResponse.data.clientSecret);
+
+                // Process payment with the clientSecret directly
+                const success = await handleStripePayment(response.data.orderId, paymentResponse.data.clientSecret);
+                if (success) {
+                  setOrderStatus('finding_driver');
+                  findDriver(response.data.orderId, {
+                    pickupLatitude: orderDetails.pickupAddress?.latitude || 0,
+                    pickupLongitude: orderDetails.pickupAddress?.longitude || 0,
+                    vehicleType: orderDetails.vehicleName || 'standard',
+                  });
+                  subscribeToOrderUpdates(response.data.orderId);
+                } else {
+                  axios
+                    .delete(`http://localhost:3003/api/orders/${response.data.orderId}`)
+                    .catch((error) => console.error('Error cancelling order:', error));
+                  toast.error('Order cancelled due to payment failure.');
+                }
+              } else {
+                throw new Error('No clientSecret in response');
+              }
+            } catch (error) {
+              console.error('Error creating Payment Intent:', error);
+              toast.error('Failed to initialize payment. Please try again.');
+              setIsLoading(false);
+              return;
+            }
           } else if (orderDetails.paymentMethod === 'wallet') {
             toast.success('Processing wallet payment...');
+            setOrderStatus('finding_driver');
+            findDriver(response.data.orderId, {
+              pickupLatitude: orderDetails.pickupAddress?.latitude || 0,
+              pickupLongitude: orderDetails.pickupAddress?.longitude || 0,
+              vehicleType: orderDetails.vehicleName || 'standard',
+            });
+            subscribeToOrderUpdates(response.data.orderId);
           }
+        } else {
+          setOrderStatus('finding_driver');
+          findDriver(response.data.orderId, {
+            pickupLatitude: orderDetails.pickupAddress?.latitude || 0,
+            pickupLongitude: orderDetails.pickupAddress?.longitude || 0,
+            vehicleType: orderDetails.vehicleName || 'standard',
+          });
+          subscribeToOrderUpdates(response.data.orderId);
         }
-        
-        setOrderStatus('finding_driver');
-        
-        findDriver(response.data.orderId, {
-          pickupLatitude: orderDetails.pickupAddress.latitude || 0,
-          pickupLongitude: orderDetails.pickupAddress.longitude || 0,
-          vehicleType: orderDetails.vehicleName || 'standard'
-        });
-        
-        subscribeToOrderUpdates(response.data.orderId);
       } else {
         toast.error(response.message || 'Failed to place order');
+        setIsLoading(false);
       }
     } catch (error) {
       console.error('Error placing order:', error);
       toast.error('Failed to place order. Please try again.');
-    } finally {
       setIsLoading(false);
     }
   };
-  
-  // Find and assign a driver for the order
-  const findDriver = async (orderId: string, orderLocation: { 
-    pickupLatitude: number; 
-    pickupLongitude: number;
-    vehicleType: string;
-  }) => {
+
+  const findDriver = async (
+    orderId: string,
+    orderLocation: {
+      pickupLatitude: number;
+      pickupLongitude: number;
+      vehicleType: string;
+    }
+  ) => {
     try {
       console.log('Finding driver for order:', orderId, 'location:', orderLocation);
-      
+
       const response = await axios.post(`http://localhost:3003/api/drivers/assign-driver`, {
         orderId: orderId,
         pickupLocation: {
           latitude: orderLocation.pickupLatitude,
-          longitude: orderLocation.pickupLongitude
+          longitude: orderLocation.pickupLongitude,
         },
         vehicleType: orderLocation.vehicleType,
         maxDistance: 10,
-        maxWaitTime: 60
+        maxWaitTime: 60,
       });
       console.log('Driver request response:', response.data);
-      
+
       const result = response.data;
-      
+
       if (result.success) {
         console.log('Driver request sent successfully:', result);
         setOrderStatus('finding_driver');
         toast.success('Looking for nearby drivers...');
-        
+
         const socket = io('http://localhost:3003', {
           path: '/socket',
           transports: ['websocket'],
-          reconnection: true
+          reconnection: true,
         });
-        
+
         socket.on('connect', () => {
           console.log('WebSocket connected for driver assignment');
-          
+
           socket.emit('join_order_room', {
             orderId,
-            userId: user?.userId || user?._id
+            userId: user?.userId || user?._id,
           });
         });
-        
+
         const driverAcceptanceTimeout = setTimeout(() => {
-          toast.error('No driver accepted your request. We\'ll try again with another driver.');
+          toast.error("No driver accepted your request. We'll try again with another driver.");
           setOrderStatus('created');
           socket.disconnect();
           navigate('/orders');
         }, 45000);
-        
+
         socket.on('driver_response', (data: DriverResponseData) => {
           console.log('Driver response:', data);
-          
+
           if (data.accepted) {
             clearTimeout(driverAcceptanceTimeout);
             setOrderStatus('driver_assigned');
             toast.success('Driver assigned to your order!');
-            
+
             startDriverLocationUpdates(orderId, data.partnerId);
             fetchDriverDetails(data.partnerId, orderId);
-            
+
             const pickupOtp = generateOtp();
-            setOtpStatus(prev => ({
+            setOtpStatus((prev) => ({
               ...prev,
-              pickupOtp: pickupOtp
+              pickupOtp: pickupOtp,
             }));
-            
-            axios.post(`http://localhost:3003/api/orders/${orderId}/otp`, {
-              type: 'pickup',
-              otp: pickupOtp
-            }).catch(error => {
-              console.error('Error saving pickup OTP:', error);
-            });
-            
-            axios.patch(`http://localhost:3004/api/orders/${orderId}`, {
-              driverId: data.partnerId,
-            })
-              .then(response => {
+
+            axios
+              .post(`http://localhost:3003/api/orders/${orderId}/otp`, {
+                type: 'pickup',
+                otp: pickupOtp,
+              })
+              .catch((error) => {
+                console.error('Error saving pickup OTP:', error);
+              });
+
+            axios
+              .patch(`http://localhost:3004/api/orders/${orderId}`, {
+                driverId: data.partnerId,
+              })
+              .then((response) => {
                 console.log('Order updated with driverId:', response.data);
               })
-              .catch(error => {
+              .catch((error) => {
                 console.error('Error updating order with driverId:', error);
                 toast.error('Failed to update order with driver information.');
               });
-            
+
             if (user?.userId) {
               const activeOrderData: ActiveOrder = {
                 userId: user.userId,
@@ -603,22 +682,23 @@ console.log('status===>:', orderStatus);
                 status: 'driver_assigned',
                 timestamp: Date.now(),
                 vehicle: orderDetails.vehicleName || null,
-                pickupOtp: pickupOtp
+                pickupOtp: pickupOtp,
               };
-              
-              activeOrderService.storeActiveOrder(user.userId, activeOrderData)
-                .then(success => {
+
+              activeOrderService
+                .storeActiveOrder(user.userId, activeOrderData)
+                .then((success) => {
                   if (success) {
                     console.log('Active order data stored successfully');
                   } else {
                     console.warn('Failed to store active order data in Redis');
                   }
                 })
-                .catch(error => {
+                .catch((error) => {
                   console.error('Error storing active order data:', error);
                 });
             }
-            
+
             setTimeout(() => {
               navigate('/home');
             }, 2000);
@@ -626,10 +706,10 @@ console.log('status===>:', orderStatus);
             toast.error('Driver rejected the request. Looking for another driver...');
           }
         });
-        
+
         socket.on('order_status_updated', (data: OrderStatusUpdateData) => {
           console.log('Order status updated:', data);
-          
+
           if (data.status === 'driver_rejected') {
             toast.error('Driver is not available. Trying the next available driver...');
           } else if (data.status === 'no_drivers_available') {
@@ -640,7 +720,7 @@ console.log('status===>:', orderStatus);
             }, 4000);
           }
         });
-        
+
         return socket;
       } else {
         console.log('Driver assignment failed:', result);
@@ -657,25 +737,24 @@ console.log('status===>:', orderStatus);
       }, 4000);
     }
   };
-  
-  // Fetch driver details
+
   const fetchDriverDetails = async (driverId: string, orderId: string) => {
     try {
       const driverResponse = await axios.get(`http://localhost:3003/api/drivers/${driverId}`);
       const driverData = driverResponse.data.partner;
       console.log('Driver details:', driverData);
-      
+
       if (driverData) {
         const distance = driverData.distance || 3;
         let estimatedMinutes = Math.round(distance * 3);
         if (estimatedMinutes < 1) estimatedMinutes = 1;
         const estimatedArrival = `${estimatedMinutes} min`;
-        
+
         const pickupLat = orderDetails.pickupAddress?.latitude || 0;
         const pickupLng = orderDetails.pickupAddress?.longitude || 0;
         const driverLat = driverData.location?.coordinates?.[1] || pickupLat;
         const driverLng = driverData.location?.coordinates?.[0] || pickupLng;
-        
+
         const initialDriverData: DriverTracking = {
           driverId: driverId,
           driverName: driverData?.fullName || 'Your Driver',
@@ -683,13 +762,13 @@ console.log('status===>:', orderStatus);
           vehicle: driverData?.vehicleType || 'Standard Vehicle',
           location: {
             latitude: driverLat,
-            longitude: driverLng
+            longitude: driverLng,
           },
           estimatedArrival: estimatedArrival,
           distance: distance,
-          phone: driverData?.mobileNumber 
+          phone: driverData?.mobileNumber,
         };
-        
+
         setDriverTracking(initialDriverData);
         console.log('Driver tracking initialized:', initialDriverData);
       } else {
@@ -700,53 +779,47 @@ console.log('status===>:', orderStatus);
       toast.error('Could not fetch driver details. Please contact support.');
     }
   };
-  
-  // Start polling for driver location updates
+
   const startDriverLocationUpdates = (orderId: string, driverId: string) => {
     if (driverLocationInterval.current) {
       clearInterval(driverLocationInterval.current);
     }
-    
+
     let failedAttempts = 0;
     const MAX_FAILED_ATTEMPTS = 5;
-    
+
     console.log(`Starting location updates for driver ${driverId} on order ${orderId}`);
-    
+
     driverLocationInterval.current = setInterval(async () => {
       try {
         const response = await axios.get(`http://localhost:3003/api/drivers/${driverId}`);
         const driverData = response.data?.partner;
-        
+
         if (!driverData) {
           console.error('No driver data received in location update');
           failedAttempts++;
-          
+
           if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
             clearInterval(driverLocationInterval.current!);
             driverLocationInterval.current = null;
           }
           return;
         }
-        
+
         failedAttempts = 0;
-        
+
         if (driverData.location && driverData.location.coordinates) {
           const driverLat = driverData.location.coordinates[1];
           const driverLng = driverData.location.coordinates[0];
           const pickupLat = orderDetails.pickupAddress?.latitude || 0;
           const pickupLng = orderDetails.pickupAddress?.longitude || 0;
-          
-          const distance = calculateDistance(
-            driverLat,
-            driverLng,
-            pickupLat,
-            pickupLng
-          );
-          
+
+          const distance = calculateDistance(driverLat, driverLng, pickupLat, pickupLng);
+
           let estimatedMinutes = Math.round(distance * 3);
           if (estimatedMinutes < 1) estimatedMinutes = 1;
           const estimatedArrival = `${estimatedMinutes} min`;
-          
+
           const updatedDriverInfo: DriverTracking = {
             driverId: driverId,
             driverName: driverData?.fullName || 'Your Driver',
@@ -754,23 +827,23 @@ console.log('status===>:', orderStatus);
             vehicle: driverData?.vehicleType || 'Standard Vehicle',
             location: {
               latitude: driverLat,
-              longitude: driverLng
+              longitude: driverLng,
             },
             estimatedArrival: estimatedArrival,
             distance: parseFloat(distance.toFixed(2)),
-            phone: driverData?.mobileNumber
+            phone: driverData?.mobileNumber,
           };
-          
+
           setDriverTracking(updatedDriverInfo);
           console.log('Driver tracking updated:', updatedDriverInfo);
-          
+
           if (orderStatus !== 'driver_assigned' && orderStatus !== 'driver_arrived' && orderStatus !== 'picked_up') {
             setOrderStatus('driver_assigned');
           }
         } else {
           console.log('Driver location coordinates not available in update');
           failedAttempts++;
-          
+
           if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
             clearInterval(driverLocationInterval.current!);
             driverLocationInterval.current = null;
@@ -780,7 +853,7 @@ console.log('status===>:', orderStatus);
       } catch (error) {
         console.error('Error getting driver location:', error);
         failedAttempts++;
-        
+
         if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
           clearInterval(driverLocationInterval.current!);
           driverLocationInterval.current = null;
@@ -789,8 +862,7 @@ console.log('status===>:', orderStatus);
       }
     }, 5000);
   };
-  
-  // Clean up interval on unmount
+
   useEffect(() => {
     return () => {
       if (driverLocationInterval.current) {
@@ -798,23 +870,20 @@ console.log('status===>:', orderStatus);
       }
     };
   }, []);
-  
-  // Helper to determine if payment method is pre-payment or post-payment
+
   const isPrePaymentMethod = (method: PaymentMethod): boolean => {
-    return ['razorpay', 'wallet'].includes(method);
+    return ['stripe', 'wallet'].includes(method);
   };
-  
-  // Get the progress based on current step
+
   const getProgress = () => {
     return (currentStep / 5) * 100;
   };
-  
-  // Render the current step
+
   const renderStep = () => {
-    switch(currentStep) {
+    switch (currentStep) {
       case 1:
         return (
-          <AddressSelector 
+          <AddressSelector
             pickupAddress={orderDetails.pickupAddress}
             dropoffAddress={orderDetails.dropoffAddress}
             onPickupSelected={(address) => updateOrderDetails('pickupAddress', address)}
@@ -823,7 +892,7 @@ console.log('status===>:', orderStatus);
         );
       case 2:
         return (
-          <VehicleSelection 
+          <VehicleSelection
             vehicles={vehicles}
             selectedVehicleId={orderDetails.vehicleId}
             onSelect={handleVehicleSelect}
@@ -831,7 +900,7 @@ console.log('status===>:', orderStatus);
         );
       case 3:
         return (
-          <DeliveryTypeSelection 
+          <DeliveryTypeSelection
             selectedType={orderDetails.deliveryType}
             onSelect={(type) => updateOrderDetails('deliveryType', type)}
           />
@@ -845,67 +914,87 @@ console.log('status===>:', orderStatus);
         );
       case 5:
         return (
-          <OrderSummary 
-            orderDetails={orderDetails as any}
-            onSubmit={submitOrder}
-            isLoading={isLoading}
-            onBack={handlePreviousStep}
-          />
+          <div>
+            {orderDetails.paymentMethod === 'stripe' && (
+              <div className="mb-4 p-4 border rounded-lg">
+                <h3 className="text-lg font-medium mb-2">Enter Card Details</h3>
+                <CardElement
+                  options={{
+                    style: {
+                      base: {
+                        fontSize: '16px',
+                        color: '#424770',
+                        '::placeholder': {
+                          color: '#aab7c4',
+                        },
+                      },
+                      invalid: {
+                        color: '#9e2146',
+                      },
+                    },
+                  }}
+                  onChange={(e) => setCardComplete(e.complete)}
+                />
+              </div>
+            )}
+            <OrderSummary
+              orderDetails={orderDetails as any}
+              onSubmit={submitOrder}
+              isLoading={isLoading}
+              onBack={handlePreviousStep}
+              cardComplete={orderDetails.paymentMethod === 'stripe' ? cardComplete : true}
+            />
+          </div>
         );
       default:
         return null;
     }
   };
-  
-  // Subscribe to real-time order updates
-  const subscribeToOrderUpdates = (orderId: string) => {
 
+  const subscribeToOrderUpdates = (orderId: string) => {
     if (socketRef.current) {
       socketRef.current.disconnect();
     }
 
-    
     const socket = io('http://localhost:3003', {
       path: '/socket',
       transports: ['websocket'],
-      reconnection: true
+      reconnection: true,
     });
-    
-    socketRef.current = socket; 
+
+    socketRef.current = socket;
 
     socket.on('connect', () => {
       console.log('WebSocket connected for order updates');
-      
+
       socket.emit('join_order_room', {
         orderId,
-        userId: user?.userId || user?._id
+        userId: user?.userId || user?._id,
       });
     });
-    
+
     socket.on('driver_arrived_pickup', (data) => {
       console.log('Received driver_arrived_pickup event for order:', orderId);
-      
+
       if (data.orderId === orderId) {
-      handleDriverArrived(orderId);
-    }
+        handleDriverArrived(orderId);
+      }
     });
-    
+
     socket.on('pickup_verified', (data) => {
       console.log('Received pickup_verified event for order:', orderId);
-      
+
       if (data.orderId === orderId) {
         handlePickupVerified(orderId);
       }
     });
-    
+
     socket.on('delivery_completed', (data) => {
       console.log('Received delivery_completed event for order:', orderId);
       if (data.orderId === orderId) {
         handleDeliveryCompleted(orderId);
       }
     });
-    
- 
   };
 
   useEffect(() => {
@@ -918,12 +1007,11 @@ console.log('status===>:', orderStatus);
       }
     };
   }, []);
-  
-  // Render order status
+
   const renderOrderStatus = () => {
     console.log('Rendering order status:', { orderStatus, driverTracking });
     if (!orderStatus) return null;
-    
+
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg p-6 max-w-md w-full">
@@ -931,9 +1019,18 @@ console.log('status===>:', orderStatus);
             <div className="mb-4">
               {orderStatus === 'finding_driver' ? (
                 <div className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center">
-                  <svg className="animate-spin h-8 w-8 text-yellow-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <svg
+                    className="animate-spin h-8 w-8 text-yellow-500"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
                   </svg>
                 </div>
               ) : orderStatus === 'driver_arrived' ? (
@@ -958,7 +1055,7 @@ console.log('status===>:', orderStatus);
                 </div>
               )}
             </div>
-            
+
             <h3 className="text-lg font-medium mb-2">
               {orderStatus === 'finding_driver' && 'Finding a driver...'}
               {orderStatus === 'driver_assigned' && 'Driver found!'}
@@ -966,7 +1063,7 @@ console.log('status===>:', orderStatus);
               {orderStatus === 'picked_up' && 'Package picked up!'}
               {orderStatus === 'completed' && 'Delivery completed!'}
             </h3>
-            
+
             {orderStatus === 'completed' && (
               <div>
                 <p className="text-gray-600 mb-4">
@@ -979,81 +1076,99 @@ console.log('status===>:', orderStatus);
       </div>
     );
   };
-  
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <NavBar />
-      <div className="flex-grow">
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <div className="bg-white rounded-xl shadow-md overflow-hidden">
-            <div className="w-full h-2 bg-gray-200">
-              <div 
-                className="h-full bg-red-500 transition-all duration-300"
-                style={{ width: `${getProgress()}%` }}
-              ></div>
+    
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <NavBar />
+        <div className="flex-grow">
+          <div className="max-w-4xl mx-auto px-4 py-6">
+            <div className="bg-white rounded-xl shadow-md overflow-hidden">
+              <div className="w-full h-2 bg-gray-200">
+                <div
+                  className="h-full bg-red-500 transition-all duration-300"
+                  style={{ width: `${getProgress()}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between px-8 pt-6">
+                <div className={`flex flex-col items-center ${currentStep >= 1 ? 'text-red-500' : 'text-gray-400'}`}>
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${
+                      currentStep >= 1 ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                  >
+                    <MapPin size={20} />
+                  </div>
+                  <span className="text-xs mt-1">Location</span>
+                </div>
+                <div className={`flex flex-col items-center ${currentStep >= 2 ? 'text-red-500' : 'text-gray-400'}`}>
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${
+                      currentStep >= 2 ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                  >
+                    <Truck size={20} />
+                  </div>
+                  <span className="text-xs mt-1">Vehicle</span>
+                </div>
+                <div className={`flex flex-col items-center ${currentStep >= 3 ? 'text-red-500' : 'text-gray-400'}`}>
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${
+                      currentStep >= 3 ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                  >
+                    <Clock size={20} />
+                  </div>
+                  <span className="text-xs mt-1">Delivery</span>
+                </div>
+                <div className={`flex flex-col items-center ${currentStep >= 4 ? 'text-red-500' : 'text-gray-400'}`}>
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${
+                      currentStep >= 4 ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                  >
+                    <DollarSign size={20} />
+                  </div>
+                  <span className="text-xs mt-1">Payment</span>
+                </div>
+                <div className={`flex flex-col items-center ${currentStep >= 5 ? 'text-red-500' : 'text-gray-400'}`}>
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${
+                      currentStep >= 5 ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    }`}
+                  >
+                    <CreditCard size={20} />
+                  </div>
+                  <span className="text-xs mt-1">Summary</span>
+                </div>
+              </div>
+              <div className="p-6">{renderStep()}</div>
+              {currentStep < 5 && (
+                <div className="flex justify-between p-6 border-t">
+                  <button
+                    onClick={handlePreviousStep}
+                    disabled={currentStep === 1}
+                    className={`px-4 py-2 rounded-lg ${
+                      currentStep === 1 ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={handleNextStep}
+                    className="px-4 py-2 bg-indigo-900 text-white rounded-lg hover:bg-indigo-800 transition-colors"
+                  >
+                    Continue
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="flex justify-between px-8 pt-6">
-              <div className={`flex flex-col items-center ${currentStep >= 1 ? 'text-red-500' : 'text-gray-400'}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${currentStep >= 1 ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}>
-                  <MapPin size={20} />
-                </div>
-                <span className="text-xs mt-1">Location</span>
-              </div>
-              <div className={`flex flex-col items-center ${currentStep >= 2 ? 'text-red-500' : 'text-gray-400'}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${currentStep >= 2 ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}>
-                  <Truck size={20} />
-                </div>
-                <span className="text-xs mt-1">Vehicle</span>
-              </div>
-              <div className={`flex flex-col items-center ${currentStep >= 3 ? 'text-red-500' : 'text-gray-400'}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${currentStep >= 3 ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}>
-                  <Clock size={20} />
-                </div>
-                <span className="text-xs mt-1">Delivery</span>
-              </div>
-              <div className={`flex flex-col items-center ${currentStep >= 4 ? 'text-red-500' : 'text-gray-400'}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${currentStep >= 4 ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}>
-                  <DollarSign size={20} />
-                </div>
-                <span className="text-xs mt-1">Payment</span>
-              </div>
-              <div className={`flex flex-col items-center ${currentStep >= 5 ? 'text-red-500' : 'text-gray-400'}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${currentStep >= 5 ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}>
-                  <CreditCard size={20} />
-                </div>
-                <span className="text-xs mt-1">Summary</span>
-              </div>
-            </div>
-            <div className="p-6">
-              {renderStep()}
-            </div>
-            {currentStep < 5 && (
-              <div className="flex justify-between p-6 border-t">
-                <button
-                  onClick={handlePreviousStep}
-                  disabled={currentStep === 1}
-                  className={`px-4 py-2 rounded-lg ${
-                    currentStep === 1 
-                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  Back
-                </button>
-                <button
-                  onClick={handleNextStep}
-                  className="px-4 py-2 bg-indigo-900 text-white rounded-lg hover:bg-indigo-800 transition-colors"
-                >
-                  Continue
-                </button>
-              </div>
-            )}
           </div>
         </div>
+        {renderOrderStatus()}
+        <Footer />
       </div>
-      {renderOrderStatus()}
-      <Footer />
-    </div>
+    
   );
 };
 

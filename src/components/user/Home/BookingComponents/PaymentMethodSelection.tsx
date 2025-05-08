@@ -1,7 +1,7 @@
 import React from 'react';
 import { CreditCard, Wallet, DollarSign, QrCode } from 'lucide-react';
 
-export type PaymentMethod = 'razorpay' | 'wallet' | 'cash' | 'upi';
+export type PaymentMethod = 'stripe' | 'wallet' | 'cash' | 'upi';
 export type PaymentTiming = 'pre' | 'post';
 
 export interface PaymentOption {
@@ -24,9 +24,9 @@ const PaymentMethodSelection: React.FC<PaymentMethodSelectionProps> = ({
   const paymentOptions: PaymentOption[] = [
     // Pre-payment options
     {
-      id: 'razorpay',
+      id: 'stripe',
       name: 'Credit/Debit Card',
-      description: 'Pay securely with Razorpay',
+      description: 'Pay securely with stripe',
       icon: <CreditCard className="w-5 h-5" />,
       timing: 'pre'
     },
