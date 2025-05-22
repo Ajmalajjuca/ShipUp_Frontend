@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "../../Redux/store";
 import { useNavigate } from 'react-router-dom';
-import DeliveryPartnerDashboard from './components/DeliveryPartnerDashboard';
+import DeliveryPartnerDashboard from './components/delivery-partner/DeliveryPartnerDashboard';
 import { sessionManager } from '../../utils/sessionManager';
 import { setEmailId } from '../../Redux/slices/driverSlice';
 import { driverService } from '../../services/driver.service';

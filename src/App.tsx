@@ -32,7 +32,7 @@ function App() {
           const isValid = await sessionManager.verifyToken();
           
           if (isValid) {
-            const updatedSession = sessionManager.getSession();
+            const updatedSession = sessionManager.getSession();            
             dispatch(loginSuccess({ user: updatedSession.user, token:updatedSession.token||'', refreshToken: updatedSession.refreshToken|| '' }));
           } else {
             sessionManager.clearSession();

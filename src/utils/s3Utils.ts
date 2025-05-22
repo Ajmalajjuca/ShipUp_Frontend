@@ -3,7 +3,7 @@ import { sessionManager } from './sessionManager';
 
 const USER_URL = import.meta.env.VITE_USER_SERVICE_URL || 'http://localhost:3002';
 const PARTNER_URL = import.meta.env.VITE_PARTNER_SERVICE_UR || 'http://localhost:3003';
-const AUTH_URL = import.meta.env.VITE_AUTH_SERVICE_URL || 'http://localhost:3001';
+const AUTH_URL = import.meta.env.VITE_API_GATEWAY_URL || 'http://localhost:3001';
 
 export const s3Utils = {
   getImageUrl: (key: string | null | undefined, bucket: string): string => {
@@ -104,8 +104,8 @@ export const s3Utils = {
 
       // Use partner service URL for driver uploads
       let uploadUrl = isDriver ? 
-        `${PARTNER_URL}/api/s3/upload` : 
-        `${USER_URL}/api/s3/upload`;
+        `${AUTH_URL}/api/partners/s3/upload` : 
+        `${AUTH_URL}/api/users/s3/upload`;
         
       // Add query parameter to indicate profile image if needed
       if (isProfilePicture) {

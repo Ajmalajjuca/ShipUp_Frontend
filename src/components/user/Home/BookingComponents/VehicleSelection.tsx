@@ -8,6 +8,8 @@ export interface VehicleSelectionProps {
     pricePerKm: number;
     maxWeight: number;
     imageUrl?: string;
+    isAvailable: boolean;
+    isActive?: boolean;
   }>;
   selectedVehicleId: string | null;
   onSelect: (vehicleId: string) => void;
@@ -32,11 +34,13 @@ const VehicleSelection: React.FC<VehicleSelectionProps> = ({
 
   return (
     <div>
+     
       <h2 className="text-xl font-semibold text-gray-800 mb-4">Select a vehicle</h2>
       <p className="text-gray-600 mb-6">Choose the right vehicle for your delivery needs</p>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {vehicles.map((vehicle) => (
+        {vehicles.filter(v=>v.isActive).map((vehicle) => (
+          
           <div
             key={vehicle.id}
             onClick={() => onSelect(vehicle.id)}

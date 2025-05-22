@@ -25,7 +25,7 @@ const AdminLoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post("http://localhost:3001/auth/login", {
+      const response = await axios.post("http://localhost:3000/auth/login", {
         email,
         password,
       });

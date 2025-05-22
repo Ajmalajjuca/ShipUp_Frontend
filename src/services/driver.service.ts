@@ -1,6 +1,7 @@
-import { driverApi, orderApi, partnerApi } from './axios/instance';
-import axios from 'axios';
+import { api } from './axios/instance';
 import { sessionManager } from '../utils/sessionManager';
+import { verify } from 'crypto';
+import { get } from 'http';
 
 interface Driver {
   partnerId: string;
@@ -47,104 +48,125 @@ interface DriverProfile {
   address?: string;
 }
 
-const PARTNER_SERVICE_URL = import.meta.env.VITE_PARTNER_SERVICE_URL || 'http://localhost:3003/api';
-
 export const driverService = {
   getAllDrivers: async () => {
-    const response = await driverApi.get('/api/drivers');
+    const response = await api.get('/api/partners/drivers');
     return response.data;
   },
 
   getDriverById: async (id: string) => {
-    const response = await driverApi.get(`/api/drivers/${id}`);
+    const response = await api.get(`/api/partners/drivers/${id}`);
     return response.data;
   },
 
-  getPartnerOrders: async (partnerId: string) => {
-    
+  getRatingByDriverId: async (id: string) => {
+    const response = await api.get(`/api/partners/drivers/${id}/ratings`);
+    return response.data;
+  },
+
+  getOrderRating: async (orderId: string) => {
+    const response = await api.get(`/api/partners/drivers/orders/${orderId}/ratings`);
+    return response.data;
+  },
+
+  
+
+
+  getPartnerOrders: async (
+    partnerId: string,
+    page: number = 1,
+    limit: number = 10,
+    status?: string,
+    search?: string
+  ) => {
     try {
-      const response = await orderApi.get(`/orders/drivers/${partnerId}`);
-      
-      return response.data;
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+      if (status) params.append('status', status);
+      if (search) params.append('search', search);
+
+      const response = await api.get(`/api/orders/drivers/${partnerId}?${params.toString()}`);
+      return response.data; // Expected: { orders: Array, total: number, page: number, limit: number, totalPages: number }
     } catch (error) {
-      console.error('Error fetching partner orders:', error);
+      console.error(`Failed to fetch orders for partner ${partnerId}:`, error);
+      throw error; // Rethrow to allow fetchDeliveriesById to handle
     }
   },
 
   updateDriverStatus: async (id: string, status: boolean) => {
-    const response = await driverApi.put(`/api/drivers/${id}/status`, { status });
+    const response = await api.put(`/api/partners/drivers/${id}/status`, { status });
     return response.data;
   },
 
   updateDriver: async (id: string, data: Partial<Driver>) => {
-    const response = await driverApi.put(`/api/drivers/${id}`, data);
+    const response = await api.put(`/api/partners/drivers/${id}`, data);
     return response.data;
   },
 
   deleteDriver: async (id: string) => {
-    const response = await driverApi.delete(`/api/drivers/${id}`);
+    const response = await api.delete(`/api/partners/drivers/${id}`);
     return response.data;
   },
 
   verifyDocument: async (id: string, field: string) => {
-    const response = await driverApi.put(`/api/drivers/${id}/verification`, {
-      [field]: true
+    const response = await api.put(`/api/partners/drivers/${id}/verification`, {
+      [field]: true,
     });
     return response.data;
   },
 
   checkVerificationStatus: async (email: string) => {
-    const response = await partnerApi.get(`/api/drivers/verify-doc?email=${email}`);
+    const response = await api.get(`/api/partners/drivers/verify-doc?email=${email}`);
     return response.data;
   },
 
   getDashboardStats: async (driverId: string): Promise<DashboardStats> => {
-    const response = await driverApi.get(`/api/drivers/${driverId}/dashboard-stats`);
+    const response = await api.get(`/api/partners/drivers/${driverId}/dashboard-stats`);
     return response.data;
   },
 
   getPerformanceMetrics: async (driverId: string, period: string): Promise<PerformanceMetrics> => {
-    const response = await driverApi.get(`/api/drivers/${driverId}/performance?period=${period}`);
+    const response = await api.get(`/api/partners/drivers/${driverId}/performance?period=${period}`);
     return response.data;
   },
 
   getActiveDelivery: async (driverId: string): Promise<ActiveDelivery | null> => {
-    const response = await driverApi.get(`/api/drivers/${driverId}/active-delivery`);
+    const response = await api.get(`/api/partners/drivers/${driverId}/active-delivery`);
     return response.data.delivery;
   },
 
   getDriverProfile: async (driverId: string): Promise<DriverProfile> => {
-    const response = await driverApi.get(`/api/drivers/${driverId}/profile`);
+    const response = await api.get(`/api/partners/drivers/${driverId}/profile`);
     return response.data.profile;
   },
 
   updateOnlineStatus: async (driverId: string, isOnline: boolean): Promise<boolean> => {
-    const response = await driverApi.put(`/api/drivers/${driverId}/status`, { isOnline });
+    const response = await api.put(`/api/partners/drivers/${driverId}/status`, { isOnline });
     return response.data.success;
   },
 
-  updateProfile: async (driverId: string, data: Partial<DriverProfile>): Promise<DriverProfile> => {
+  updatePrFofile: async (driverId: string, data: Partial<DriverProfile>): Promise<DriverProfile> => {
     const formData = new FormData();
-    
+
     Object.entries(data).forEach(([key, value]) => {
       if (value && typeof value === 'object' && 'name' in value && 'type' in value) {
-        // This is a file-like object
         formData.append(key, value as any);
       } else if (value !== undefined) {
         formData.append(key, String(value));
       }
     });
 
-    const response = await driverApi.put(`/api/drivers/${driverId}/profile`, formData, {
+    const response = await api.put(`/api/partners/drivers/${driverId}/profile`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
-    
+
     return response.data.profile;
   },
 
-  // Add a new method to update document URLs
   async updateDocumentUrls(partnerId: string, vehicleDocuments: any) {
     try {
       const { token } = sessionManager.getDriverSession();
@@ -152,14 +174,14 @@ export const driverService = {
         throw new Error('Authentication required');
       }
 
-      const response = await axios.put(
-        `${PARTNER_SERVICE_URL}/drivers/${partnerId}/documents`,
+      const response = await api.put(
+        `/api/partners/drivers/${partnerId}/documents`,
         { vehicleDocuments },
         {
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          }
+            'Authorization': `Bearer ${token}`,
+          },
         }
       );
 
@@ -168,5 +190,53 @@ export const driverService = {
       console.error('Error updating document URLs:', error);
       throw error.response?.data || error.message;
     }
-  }
-}; 
+  },
+
+  async sendDeliveryOtp(orderId: string, Otp:string,type: string) {
+    try {
+      const response = await api.post(`/api/orders/${orderId}/otp`, {
+        type: type,
+        otp: Otp,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error sending pickup OTP:', error);
+      throw error;
+    }
+  },
+
+  verifyDeliveryOtp: async (orderId: string, otp: string, type: string, partnerId: string) => {
+    try {
+      const response = await api.post(`/api/partners/drivers/orders/${orderId}/verify-otp`, {
+        type,
+        otp,
+        partnerId
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error verifying pickup OTP:', error);
+      throw error;
+    }
+  },
+
+  updateDriverById: async (id: string, data: any, section: any) => {
+    const response = await api.put(`/api/partners/drivers/${id}/${section}`,{...data[section]});
+    return response.data;
+  },
+  updateImage: async (id: string, data: any) => {
+    const response = await api.put(`/api/partners/drivers/${id}/profile-image`, data,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data;
+  },
+
+
+
+
+
+  
+};

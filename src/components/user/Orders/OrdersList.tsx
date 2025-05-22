@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { RootState } from '../../../Redux/store';
 import NavBar from '../NavBar';
+import { orderService } from '../../../services/order.service';
 
 // --- Interfaces ---
 interface Order {
@@ -52,13 +53,12 @@ const OrdersList: React.FC = () => {
       try {
         setIsLoading(true);
         setError(null);
-        const response = await axios.get<{ orders: Order[] }>(
-          `http://localhost:3004/api/orders/user/${user.userId}`
-        );
-        console.log('Fetched orders:', response.data);
+       const response = await orderService.getOrderByuserId(user.userId)
+      
+        console.log('Fetched orders:', response);
         
         // Validate response.data.orders is an array
-        const fetchedOrders = Array.isArray(response.data) ? response.data : [];
+        const fetchedOrders = Array.isArray(response) ? response : [];
         setOrders(fetchedOrders);
         setFilteredOrders(fetchedOrders);
       } catch (err) {

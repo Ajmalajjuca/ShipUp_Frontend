@@ -12,6 +12,10 @@ import {
 import { toast } from "react-hot-toast";
 import axios from "axios";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { walletService } from "../../../../services/wallet.service";
+import { useSelector } from "react-redux";
+import { RootState } from "../../../../Redux/store";
+
 
 
 interface Transaction {
@@ -25,7 +29,7 @@ interface Transaction {
 interface WalletProps {
   walletBalance: number;
   transactions?: Transaction[];
-  setActiveSection: (section: string) => void;
+  setActiveSection: (section: "profile" | "wallet") => void;
 }
 
 const WalletComponent = ({
@@ -34,6 +38,7 @@ const WalletComponent = ({
   setActiveSection
 }: WalletProps) => {
   const [activeTab, setActiveTab] = useState<"transactions" | "add-money">("transactions");
+  const { user } = useSelector((state: RootState) => state.auth);
   const [amount, setAmount] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [cardComplete, setCardComplete] = useState(false);
@@ -42,13 +47,16 @@ const WalletComponent = ({
   const stripe = useStripe();
   const elements = useElements();
 
+  
   // Fetch transactions on component mount
   useEffect(() => {
     const fetchTransactions = async () => {
       try {
-        const response = await axios.get("http://localhost:3004/api/wallet/transactions");
-        if (response.data.success && response.data.transactions) {
-          setFetchedTransactions(response.data.transactions);
+        const response = await walletService.fetchTransactions(user.userId);
+        console.log("Transactions:", response);
+        
+        if (response.success && response.transactions) {
+          setFetchedTransactions(response.transactions);
         } else {
           toast.error("Failed to load transactions");
         }
@@ -86,21 +94,15 @@ const WalletComponent = ({
 
     try {
       // Create payment intent
-      const paymentResponse = await axios.post(
-        "http://localhost:3004/api/wallet/stripe/create-payment-intent",
-        {
-          amount: Math.round(parseFloat(amount) * 100), // Convert to cents
-          currency: "inr",
-        }
-      );
+      const paymentResponse = await walletService.createPaymentIntent(parseFloat(amount));
 
-      console.log("Payment intent response:", paymentResponse.data);
+      console.log("Payment intent response:", paymentResponse);
 
-      if (!paymentResponse.data.clientSecret) {
+      if (!paymentResponse.clientSecret) {
         throw new Error("No clientSecret in response");
       }
 
-      const clientSecret = paymentResponse.data.clientSecret;
+      const clientSecret = paymentResponse.clientSecret.client_secret;
       const cardElement = elements.getElement(CardElement);
 
       if (!cardElement) {
@@ -126,10 +128,11 @@ const WalletComponent = ({
 
       if (paymentIntent.status === "succeeded") {
         // Update wallet balance in backend
-        await axios.post("http://localhost:3004/api/wallet/add-money", {
-          amount: parseFloat(amount),
-          paymentIntentId: paymentIntent.id,
-        });
+        const token = localStorage.getItem('authToken') || '';  
+              
+        const responce = await walletService.addMoney(parseFloat(amount), paymentIntent.id, user.userId, token);
+        console.log("Add money response:", responce);
+        
 
         // Add transaction to local state
         const newTransaction: Transaction = {
@@ -152,8 +155,8 @@ const WalletComponent = ({
         toast.error("Payment not completed. Please try again.");
       }
     } catch (error) {
-      console.error("Error adding money:", error);
-      toast.error("Failed to add money. Please try again.");
+      console.error("Error adding money:", (error as any).response?.data?.message || error);
+      toast.error((error as any).response?.data?.message || "Failed to add money. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -300,7 +303,7 @@ const WalletComponent = ({
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder="0.00"
-                    className="block w-full pl-8 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-lg"
+                    className="block w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-lg"
                   />
                 </div>
               </div>
@@ -321,7 +324,23 @@ const WalletComponent = ({
                   ))}
                 </div>
               </div>
-
+                  <div className="pt-4 border-t border-gray-100">
+                <h4 className="text-gray-700 font-medium mb-4">
+                  Payment Methods
+                </h4>
+                <div className="space-y-3">
+                  {["Credit/Debit Card"].map((method) => (
+                    <button
+                      key={method}
+                      className="w-full flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
+                      disabled
+                    >
+                      <span className="font-medium text-gray-800">{method}</span>
+                      <ChevronRight size={20} className="text-gray-400" />
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div>
                 <label className="block text-gray-700 font-medium mb-2">
                   Card Details
@@ -360,23 +379,7 @@ const WalletComponent = ({
                 {isLoading ? "Processing..." : "Add Money to Wallet"}
               </button>
 
-              <div className="pt-4 border-t border-gray-100">
-                <h4 className="text-gray-700 font-medium mb-4">
-                  Payment Methods
-                </h4>
-                <div className="space-y-3">
-                  {["Credit/Debit Card"].map((method) => (
-                    <button
-                      key={method}
-                      className="w-full flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors"
-                      disabled
-                    >
-                      <span className="font-medium text-gray-800">{method}</span>
-                      <ChevronRight size={20} className="text-gray-400" />
-                    </button>
-                  ))}
-                </div>
-              </div>
+              
             </div>
           )}
         </div>

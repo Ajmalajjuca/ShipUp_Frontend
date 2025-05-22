@@ -1,4 +1,4 @@
-import { orderApi, userApi } from './axios/instance';
+import { api } from './axios/instance';
 
 interface UpdateProfileData {
   fullName?: string;
@@ -24,18 +24,14 @@ interface User {
 export const userService = {
   updateProfile: async (data: UpdateProfileData) => {
     const formData = new FormData();
-    
-    // Ensure userId is included in the form data
+
     if (data.userId) {
       formData.append('userId', data.userId);
     }
-    
-    // Add other fields to form data
+
     Object.entries(data).forEach(([key, value]) => {
       if (value !== undefined && key !== 'userId') {
-        // Handle profile image differently if it's a URL vs a File
         if (key === 'profileImage') {
-          // If it's a string (URL), append it directly
           formData.append('profileImagePath', value.toString());
         } else {
           formData.append(key, value);
@@ -43,46 +39,46 @@ export const userService = {
       }
     });
 
-    const response = await userApi.put('/update-profile', formData, {
+    const response = await api.put('/api/users/update-profile', formData, {
       headers: {
-        'Content-Type': 'multipart/form-data'
-      }
+        'Content-Type': 'multipart/form-data',
+      },
     });
     return response.data;
   },
 
   getUserProfile: async () => {
-    const response = await userApi.get('/profile');
+    const response = await api.get('/api/users/profile');
     return response.data;
   },
 
   getAllUsers: async () => {
-    const response = await userApi.get('/users');
+    const response = await api.get('/api/users');
     return response.data;
   },
 
   getUserById: async (id: string) => {
-    const response = await userApi.get(`/users/${id}`);
+    const response = await api.get(`/api/users/${id}`);
     return response.data;
   },
 
   updateUserStatus: async (id: string, status: boolean) => {
-    const response = await userApi.put(`/users/${id}/status`, { status });
+    const response = await api.put(`/api/users/${id}/status`, { status });
     return response.data;
   },
 
   updateUser: async (id: string, data: Partial<User>) => {
-    const response = await userApi.put(`/users/${id}`, data);
+    const response = await api.put(`/api/users/${id}`, data);
     return response.data;
   },
 
   deleteUser: async (id: string) => {
-    const response = await userApi.delete(`/users/${id}`);
+    const response = await api.delete(`/api/users/${id}`);
     return response.data;
   },
 
   addAddress: async (userId: string, address: any) => {
-    const response = await userApi.post(`/users/${userId}/addresses`, {
+    const response = await api.post(`/api/users/${userId}/addresses`, {
       type: address.type,
       street: address.street,
       isDefault: address.isDefault,
@@ -92,38 +88,38 @@ export const userService = {
       buildingNumber: address.buildingNumber,
       floorNumber: address.floorNumber,
       contactName: address.contactName,
-      contactPhone: address.contactPhone
+      contactPhone: address.contactPhone,
     });
     return response.data;
   },
 
   getUserAddresses: async (userId: string) => {
-    const response = await userApi.get(`/users/${userId}/addresses`);
+    const response = await api.get(`/api/users/${userId}/addresses`);
     return response.data;
   },
 
   deleteAddress: async (addressId: string) => {
-    const response = await userApi.delete(`/addresses/${addressId}`);
+    const response = await api.delete(`/api/users/addresses/${addressId}`);
     return response.data;
   },
 
   setDefaultAddress: async (userId: string, addressId: string) => {
-    const response = await userApi.put(`/users/${userId}/addresses/${addressId}/default`);
+    const response = await api.put(`/api/users/${userId}/addresses/${addressId}/default`);
     return response.data;
   },
 
   getAddress: async (addressId: string) => {
-    const response = await userApi.get(`/addresses/${addressId}`);
+    const response = await api.get(`/api/users/addresses/${addressId}`);
     return response.data;
   },
 
   updateAddress: async (addressId: string, addressData: any) => {
-    const response = await userApi.put(`/addresses/${addressId}`, addressData);
+    const response = await api.put(`/api/users/addresses/${addressId}`, addressData);
     return response.data;
   },
 
   getOrdersByUserId: async (userId: string) => {
-    const response = await orderApi.get(`/orders/user/${userId}`);
+    const response = await api.get(`/api/orders/user/${userId}`);
     return response.data;
   },
-}; 
+};

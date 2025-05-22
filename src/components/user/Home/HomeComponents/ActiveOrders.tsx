@@ -15,6 +15,8 @@ import {
 import { useGoogleMaps } from '../../../../contexts/GoogleMapsProvider';
 import toast from 'react-hot-toast';
 import PartnerRating from './order-tracking/PartnerRating'; // Adjust the import path as needed
+import { orderService } from '../../../../services/order.service';
+import { driverService } from '../../../../services/driver.service';
 
 // --- Interfaces ---
 interface Address {
@@ -76,17 +78,7 @@ const ActiveOrders: React.FC = () => {
 
     useEffect(() => {
         if (activeOrder?.status && activeOrder?.orderId) {
-            const updateOrderStatusInDB = async () => {
-                try {
-                    await axios.patch(`http://localhost:3004/api/orders/${activeOrder.orderId}`, {
-                        status: activeOrder.status
-                    });
-                } catch (error) {
-                    console.error('Error updating order status in DB:', error);
-                    toast.error('Failed to update order status. Please contact support.');
-                }
-            };
-            updateOrderStatusInDB();
+            orderService.updateOrderStatusInDB(activeOrder.orderId, activeOrder.status);
         }
     }, [activeOrder?.status, activeOrder?.orderId]);
 
@@ -223,10 +215,10 @@ const ActiveOrders: React.FC = () => {
 
             try {
                 console.log(`Fetching driver ${currentDriverId} (${isInitialLoad ? 'initial' : 'poll'})...`);
-                const response = await axios.get<{ partner: DriverData }>(`http://localhost:3003/api/drivers/${currentDriverId}`);
+                const response = await driverService.getDriverById(currentDriverId);
 
-                if (response.data?.partner) {
-                    const partnerData = response.data.partner;
+                if (response?.partner) {
+                    const partnerData = response.partner;
                     const previousLocationJson = JSON.stringify(driverDataRef.current?.location?.coordinates);
                     const newLocationJson = JSON.stringify(partnerData.location?.coordinates);
 
@@ -291,9 +283,9 @@ const ActiveOrders: React.FC = () => {
                             activeOrderService.storeActiveOrder(user.userId, updated as ActiveOrder)
                                 .catch(err => console.error("Failed to store updated order with dropoff OTP:", err));
                         }
-
-                        axios.post(`http://localhost:3003/api/orders/${order.orderId}/otp`, { type: 'dropoff', otp })
-                            .catch(err => console.error("Failed to save dropoff OTP:", err));
+                        driverService.sendDeliveryOtp(order.orderId, otp, 'dropoff')
+                        .then(() => console.log('Dropoff OTP sent to driver.'))
+                        .catch(err => console.error('Failed to send dropoff OTP:', err));
                     }
                 });
                 socket.on('delivery_completed', () => {

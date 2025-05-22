@@ -14,38 +14,7 @@ interface ProfileLayoutProps {
   children: React.ReactNode;
 }
 
-const sampleTransactions: { id: string; type: 'credit' | 'debit'; amount: number; description: string; date: string; }[] = [
-  {
-    id: '1',
-    type: 'credit',
-    amount: 2500,
-    description: 'Add money via UPI',
-    date: '05 May, 2025'
-  },
-  {
-    id: '2',
-    type: 'debit',
-    amount: 1200,
-    description: 'Order #45678',
-    date: '01 May, 2025'
-  },
-  {
-    id: '3',
-    type: 'credit',
-    amount: 1000,
-    description: 'Refund - Order #43421',
-    date: '28 Apr, 2025'
-  },
-  {
-    id: '4',
-    type: 'debit',
-    amount: 3500,
-    description: 'Order #42167',
-    date: '15 Apr, 2025'
-  },
-  
 
-];
 
 const ProfileLayout: React.FC<ProfileLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
@@ -91,7 +60,7 @@ const ProfileLayout: React.FC<ProfileLayoutProps> = ({ children }) => {
             // Show wallet content
             <WalletComponent
               walletBalance={user.walletBalance || 0}
-              transactions={sampleTransactions}
+              transactions={user.transactions || []}
               setActiveSection={setActiveSection}
             />
           )}

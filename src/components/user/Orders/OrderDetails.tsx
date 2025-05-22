@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { MapPin, Truck, ArrowLeft, Calendar, Phone, User, CreditCard, RotateCcw } from 'lucide-react';
 import axios from 'axios';
 import NavBar from '../NavBar';
+import { orderService } from '../../../services/order.service';
+import { driverService } from '../../../services/driver.service';
 
 // --- Interfaces ---
 interface Address {
@@ -62,24 +64,18 @@ const OrderDetails: React.FC = () => {
         setError(null);
 
         // Fetch order details
-        const orderResponse = await axios.get<Order>(`http://localhost:3004/api/orders/${orderId}`);
-        console.log('Order Details:', orderResponse.data);
-        setOrder(orderResponse.data);
+        const order = await orderService.getOrderById(orderId);
+        console.log('Order Details:', order);
+        setOrder(order);
 
         // Fetch driver details using driverId
-        if (orderResponse.data.driverId) {
+        if (order.driverId) {
           try {
-            const driverResponse = await axios.get<{
-              partner: {
-                fullName: string;
-                mobileNumber: string;
-                registrationNumber?: string;
-                averageRating?: number;
-                profilePicturePath?: string;
-              };
-            }>(`http://localhost:3003/api/drivers/${orderResponse.data.driverId}`);
-            console.log('Driver Details:', driverResponse.data);
-            const { partner } = driverResponse.data;
+            const driver = await driverService.getDriverById(order.driverId);
+            console.log('Driver Details:', driver);
+            const { partner } = driver;
+            console.log('Partner Details:', partner);
+            
             setDriverDetails({
               name: partner.fullName,
               phone: partner.mobileNumber,
@@ -90,15 +86,15 @@ const OrderDetails: React.FC = () => {
             console.error('Failed to fetch driver details:', driverErr);
             setDriverDetails(null); // Handle missing driver data gracefully
           }
-        }if(orderResponse.data.driverId) {
+        }if(order.driverId) {
           try {
-            const ratingResponse = await axios.get(`http://localhost:3003/api/drivers/${orderResponse.data.driverId}/ratings`);
-            console.log('Driver Ratings:', ratingResponse.data);
+            const rating = await driverService.getRatingByDriverId(order.driverId);
+            console.log('Driver Ratings:', rating);
             setDriverDetails((prev) => {
               if (!prev) return null; // Ensure prev is not null
               return {
                 ...prev,
-                rating: ratingResponse.data?.data?.averageRating,
+                rating: rating.data?.averageRating,
               };
             });
           }catch(err){

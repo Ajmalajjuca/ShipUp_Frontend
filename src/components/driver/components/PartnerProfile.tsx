@@ -8,9 +8,10 @@ import { useNavigate } from 'react-router-dom';
 import { RootState } from '../../../Redux/store';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
-import { partnerApi } from '../../../services/axios/instance';
+import { api } from '../../../services/axios/instance';
 import { setDriverData } from '../../../Redux/slices/driverSlice';
 import { vehicleService } from '../../../services/vehicle.service';
+import { driverService } from '../../../services/driver.service';
 
 // TypeScript Interfaces
 interface EditableSectionProps {
@@ -121,34 +122,36 @@ const PartnerProfile: React.FC = () => {
     }
   });
 
-  const fetchVehicleData = async () => {
-    try {
-      const response = await vehicleService.getVehicleById(driver?.vehicleId);
-      if (response.success) {
-        setEditData((prevData) => ({
-          ...prevData,
-          vehicle: {
-            ...prevData.vehicle,
-            vehicleType: response?.vehicle?.name || ''
-          }
-        }));
-        dispatch(setDriverData({
-          driverData: {
-            ...driver,
-          },
+  // const fetchVehicleData = async () => {
+  //   console.log('Fetching vehicle data...',driver?.vehicleId);
+    
+  //   try {
+  //     const response = await vehicleService.getVehicleById(driver?.vehicleId);
+  //     if (response.success) {
+  //       setEditData((prevData) => ({
+  //         ...prevData,
+  //         vehicle: {
+  //           ...prevData.vehicle,
+  //           vehicleType: response?.vehicle?.name || ''
+  //         }
+  //       }));
+  //       dispatch(setDriverData({
+  //         driverData: {
+  //           ...driver,
+  //         },
 
-          driverDetails: {
-            ...driver,
-            vehicleType: response?.vehicle?.name || ''
-          },
-          token: driver.token
-        }));
-      }
-    } catch (error) {
-      console.error('Error fetching vehicle data:', error);
-      toast.error('Failed to fetch vehicle data');
-    }
-  };
+  //         driverDetails: {
+  //           ...driver,
+  //           vehicleType: response?.vehicle?.name || ''
+  //         },
+  //         token: driver.token
+  //       }));
+  //     }
+  //   } catch (error) {
+  //     console.error('Error fetching vehicle data:', error);
+  //     toast.error('Failed to fetch vehicle data');
+  //   }
+  // };
 
   const fetchVehicleTypes = async () => {
     try {
@@ -199,7 +202,7 @@ const PartnerProfile: React.FC = () => {
 
       // Fetch vehicle-related data
       const fetchData = async () => {
-        await Promise.all([fetchVehicleData(), fetchVehicleTypes()]);
+        await Promise.all([ fetchVehicleTypes()]);
       };
       
       fetchData();
@@ -214,18 +217,16 @@ const PartnerProfile: React.FC = () => {
   // Save handler for different sections
   const handleSave = async (section: keyof EditDataType) => {
     try {
-      const response = await partnerApi.put(`/api/drivers/${driver.partnerId}/${section}`, {
-        ...editData[section]
-      });
+      const response = await driverService.updateDriverById(driver.partnerId, editData, section)
       
-      if (response.data.success) {
+      if (response.success) {
         toast.success(`${section} details updated successfully`);
         setActiveSection(null);
         dispatch(setDriverData({
           driverData: {
             ...driver,
           },
-          driverDetails: response.data.partner,
+          driverDetails: response.partner,
           token: driver.token
         }));
       }
@@ -245,23 +246,14 @@ const PartnerProfile: React.FC = () => {
     formData.append('profileImage', file);
 
     try {
-      const response = await partnerApi.put(
-        `/api/drivers/${driver.partnerId}/profile-image`, 
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        }
-      );
-      
-      if (response.data.success) {
+      const response = await driverService.updateImage(driver.partnerId, formData);
+      if (response.success) {
         toast.success('Profile image updated successfully');
         dispatch(setDriverData({
           driverData: {
             ...driver,
           },
-          driverDetails: response.data.partner,
+          driverDetails: response.partner,
           token: driver.token
         }));
       }

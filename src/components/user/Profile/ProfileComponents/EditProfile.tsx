@@ -148,6 +148,7 @@ const EditProfile: React.FC = () => {
       }
 
       const response = await userService.updateProfile(updateData);
+      console.log('rsponce', response);
 
       if (response.success) {
         const updatedUser = { ...user, ...response.user };

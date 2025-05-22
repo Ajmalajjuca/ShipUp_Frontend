@@ -16,7 +16,7 @@ interface ProfileCardProps {
   onLogout?: () => void;
   isEditing?: boolean;
   children?: React.ReactNode;
-  setActiveSection: (section: string) => void;
+  setActiveSection: (section: "profile" | "wallet") => void;
 }
 
 const ProfileCard: React.FC<ProfileCardProps> = ({ 

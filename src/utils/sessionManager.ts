@@ -9,6 +9,8 @@ export const sessionManager = {
     localStorage.setItem('authToken', token);
     localStorage.setItem('refreshToken', refreshToken);
     localStorage.setItem('userData', JSON.stringify(user));
+    console.log('User data set in local storage:', user);
+    
     store.dispatch(loginSuccess({ user, token, refreshToken }));
   },
 
@@ -88,6 +90,8 @@ export const sessionManager = {
         });
         
         // Store the new tokens
+        console.log('Token refresh response:', response);
+        
         this.setSession(
           response.user, 
           response.token, 
@@ -211,7 +215,7 @@ export const sessionManager = {
       }
 
       // Then get latest user data from user service
-      const userResponse = await axios.get(`http://localhost:3002/api/users/${user.userId}`, {
+      const userResponse = await axios.get(`http://localhost:3000/api/users/${user.userId}`, {
         headers: { 
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -257,7 +261,7 @@ console.log('userResponse:', userResponse.data);
       }
 
       // Check the partner's data in the partner service
-      const partnerResponse = await axios.get(`http://localhost:3003/api/drivers/${driverData.partnerId}`, {
+      const partnerResponse = await axios.get(`http://localhost:3000/api/partners/drivers/${driverData.partnerId}`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

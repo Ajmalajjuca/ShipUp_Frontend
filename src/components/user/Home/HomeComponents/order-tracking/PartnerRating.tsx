@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Star, MessageSquare, Send, ThumbsUp, Award, Clock, Shield, CheckCircle, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { orderService } from '../../../../../services/order.service';
 
 // Define interfaces for props and types
 interface PartnerRatingProps {
@@ -75,10 +76,10 @@ const PartnerRating: React.FC<PartnerRatingProps> = ({ orderId, userId, driverId
       };
 
         // Simulate API call
-        const response = await axios.post('http://localhost:3003/api/ratings', ratingData);
+        const response = await orderService.submitRating(ratingData);
       
       toast.success('Rating submitted successfully!');
-      console.log('Rating submitted:', response.data);
+      console.log('Rating submitted:', response);
       
       setSubmitted(true);
       if (onRatingComplete) onRatingComplete();

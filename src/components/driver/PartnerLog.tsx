@@ -60,7 +60,7 @@ const PartnerLog: React.FC = () => {
 
       try {
         // Call API to verify email and send OTP
-        const response = await axios.post("http://localhost:3001/auth/request-login-otp", { email });
+        const response = await axios.post("http://localhost:3000/auth/request-login-otp", { email });
 
         if (response.data.success) {
           
@@ -142,7 +142,7 @@ const PartnerLog: React.FC = () => {
     setMessage("");
 
     try {
-      const response = await axios.post("http://localhost:3001/auth/request-login-otp", { email });
+      const response = await axios.post("http://localhost:3000/auth/request-login-otp", { email });
 
       if (response.data.success) {
         setMessage("New OTP sent successfully");
